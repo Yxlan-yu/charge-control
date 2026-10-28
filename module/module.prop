@@ -1,7 +1,7 @@
-id=turbo-charge
-name=充电加速（内置WebUI控制面板）
-version=v68-2
-versionCode=69
+id=charge-control
+name=充电调控
+version=1.0
+versionCode=1
 author=酷安@诺鸡鸭/二改GitHub@Yxlan-yu
-description=在原版基础上内置 WebUI 控制面板（Miuix 风格），KernelSU / Magisk 管理器内即可查看实时充电状态、修改配置并查看走势与日志，无需再找文件。
-updateJson=https://gitee.com/chase535/turbo-charge/raw/main/update_channel/turbo-charge.json
+description=在原版基础上内置 WebUI 控制面板（Miuix 风格，仅本机 127.0.0.1 可访问），KernelSU / Magisk 管理器内即可查看实时充电状态、修改配置并查看走势与日志，无需再找文件。
+updateJson=https://raw.githubusercontent.com/Yxlan-yu/charge-control/main/update.json

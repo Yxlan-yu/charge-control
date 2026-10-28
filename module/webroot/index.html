@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>Turbo Charge · 控制台</title>
+<title>充电调控 · 控制台</title>
 <link rel="stylesheet" href="https://mui.kernelsu.org/internal/insets.css" media="not all" onload="this.media='all'">
 <style>
 :root{
@@ -286,7 +286,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
       <div class="brand">
         <div class="logo"><svg class="ic"><use href="#i-bolt"/></svg></div>
         <div class="brand-txt">
-          <h1>Turbo Charge</h1>
+          <h1>充电调控</h1>
           <p id="brandSub">正在连接模块…</p>
         </div>
       </div>
@@ -1262,7 +1262,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
       }).catch(function () { return false; });
     }).then(function (ok) {
       if (!ok) {
-        bootFail('连接不到模块服务', '请确认 turbo-charge 模块已安装、WebUI 已在 8080 端口启动；也可以直接在浏览器打开 http://127.0.0.1:8080/');
+        bootFail('连接不到模块服务', '请确认 charge-control 模块已安装、WebUI 已在 8080 端口启动；也可以直接在浏览器打开 http://127.0.0.1:8080/');
         return;
       }
       S.ready = true;

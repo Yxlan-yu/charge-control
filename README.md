@@ -1,4 +1,4 @@
-# 充电加速（内置 WebUI 控制面板）· 二改版
+# 充电调控（内置 WebUI 控制面板）· 二改版
 
 在原版 [turbo-charge v68](https://github.com/chase535/turbo-charge)（酷安 @诺鸡鸭）基础上内置了 WebUI 控制面板，由 **Yxlan-yu** 二改整合。
 
@@ -6,12 +6,15 @@
 
 ## 下载
 
-最新版：**v68-2** —— [Releases · v68-2](https://github.com/Yxlan-yu/turbo-charge-webui/releases/latest)
+最新版：**v1.0** —— [Releases · v1.0](https://github.com/Yxlan-yu/charge-control/releases/latest)
 
-- `turbo-charge-webui-v68-2.zip`：Magisk / KernelSU / KernelSU-Next 通用模块包，管理器内直接安装。
+- `charge-control-v1.0.zip`：Magisk / KernelSU / KernelSU-Next 通用模块包，管理器内直接安装。
 - 模块源码在 [`module/`](module/) 目录，`module/` 内的文件结构与 zip 内完全一致，可自行打包。
 
-## 界面预览（v68-2）
+> 本版起项目更名为 **充电调控**，模块 id 由 `turbo-charge` 改为 `charge-control`，版本号从 **v1.0** 重新计数。
+> 因为是新的模块 id，管理器不会识别为同一个模块，升级请先卸载旧模块再安装（旧配置目录会保留）。
+
+## 界面预览（v1.0）
 
 控制面板按 **Miuix（HyperOS）** 风格重做：浅色 `#F2F3F5` 底 + 白色 20px 圆角卡片 + `#3482FF` 强调色，深色为纯黑底 + `#191A1C` 卡片 + `#4A8DFF` 强调色；顶部分段控件切换 **概览 / 参数 / 日志** 三个页面，主题支持 **跟随系统 / 浅色 / 深色**。
 
@@ -38,30 +41,50 @@
 - **本次 / 上次** 两份日志切换（`log.txt` / `log.txt.old`，每次开机自动把旧日志改名保留一份）。
 - 行数可选 **100 / 200 / 500 / 1000**，支持 **自动刷新**、**一键复制**、**清空当前日志**。
 
+### 安全（v1.0 起）
+
+- **只监听本机回环地址 `127.0.0.1`**，不再监听 `0.0.0.0`，局域网内其它设备（含公共 WiFi 下的陌生人）根本连不上 8080 端口。
+- **iptables 兜底**：启动时无条件追加一条 `INPUT -p tcp --dport 8080 ! -s 127.0.0.1 -j DROP` 规则，即使某些机型的 busybox `nc` 不支持 `-s` 绑定地址、退回全局监听，外部来源的数据包也会在内核层被丢弃。
+- **卸载自动撤销**：`uninstall.sh` 会按记录逐条删除上面那条规则，不会在系统里留下残留防火墙条目。
+- **无鉴权但也不再需要鉴权**：端口已不对外，请求只可能来自本机 App（管理器 WebView）或你 `adb forward` 过来的电脑。
+
 ### 稳定性
 
 - **看门狗**：`service.sh` 每 30 秒巡检 WebUI 进程，进程掉了自动拉起；并校验 `/proc/$PID/cmdline` 防止 PID 复用误判。
+- **启动校验**：`nc -s` 启动后 1 秒做存活检查，不支持该参数就自动降级到全局监听 + iptables 拦截，不会出现「面板打不开」。
 - **日志轮转**：`webui.log` 超过 256KB 时只保留末尾 128KB，不会无限增长。
 - **旧地址兼容**：`/panel.html` 与 `/webroot/*` 一律返回新的单页面板，老书签不会 404。
 - **单文件面板**：整个前端只有一个 `webroot/index.html`（无外链、无 CDN），离线可用。
 
 ## 打开方式
 
-安装模块后，手机和电脑（同一局域网）均可访问：
+安装模块后，推荐从管理器进入：
 
 ```
-http://手机IP:8080
+KernelSU / KernelSU-Next / Magisk 管理器 → 本模块 → 打开（WebUI）
 ```
 
-或直接打开 KernelSU / Magisk 管理器 → 本模块 → 打开 WebUI。
+管理器里的 WebUI 由本机 WebView 发起请求，走 `127.0.0.1`，不受「只监听本机」影响。
 
+电脑上调试请看这里 —— **不能再用手机 IP**，需要先把端口转发到本机：
+
+```bash
+adb forward tcp:8080 tcp:8080
+# 然后在电脑浏览器打开
+http://127.0.0.1:8080
+```
+
+> 用完可以 `adb forward --remove tcp:8080` 撤销转发。
 > 所有设备信息均在本机处理，不做任何上传。
 
 ## 安装方法
 
 - **KernelSU / KernelSU-Next / Magisk**：管理器内直接安装本 zip 即可。
-- **升级**：模块 id 保持一致（`turbo-charge`），直接覆盖安装，原配置文件会自动读取合并，未识别的项回落默认值。
-- **卸载**：在管理器里卸载模块，配置目录 `/data/adb/turbo-charge` 会一并清理。
+- **升级**：模块 id 为 `charge-control`，同 id 直接覆盖安装，原配置文件会自动读取合并，未识别的项回落默认值。
+- **从旧版（`turbo-charge`）迁移**：模块已由 `turbo-charge-webui` 更名为 **充电调控**，模块 id 也从 `turbo-charge` 改成 `charge-control`。**管理器不认为这是同一个模块**，所以请先卸载旧模块再安装本模块。
+  - 安装脚本会主动清理 `/data/adb/modules/turbo-charge` 与 `/data/adb/modules_update/turbo-charge`，避免两份 `service.sh` 同时抢 8080 端口；
+  - 旧配置目录 `/data/adb/turbo-charge` **不会删**，安装时会原样读入，参数不用重新填。
+- **卸载**：在管理器里卸载模块，配置目录 `/data/adb/turbo-charge` 会一并清理，iptables 兜底规则也会撤销。
 
 ## 配置说明
 
@@ -89,6 +112,7 @@ http://手机IP:8080
 
 | 路径 | 说明 |
 |---|---|
+| `/data/adb/modules/charge-control/` | 模块目录（管理器安装位置） |
 | `/data/adb/turbo-charge/option.txt` | 当前配置 |
 | `/data/adb/turbo-charge/option.txt.bak` | 上次保存前的备份（可回滚） |
 | `/data/adb/turbo-charge/option.txt.default` | 出厂默认配置（可恢复默认） |
@@ -96,8 +120,11 @@ http://手机IP:8080
 | `/data/adb/turbo-charge/log.txt` | 模块运行日志 |
 | `/data/adb/turbo-charge/log.txt.old` | 上一次开机的日志 |
 | `/data/adb/turbo-charge/webui.log` | WebUI 服务日志 |
+| `/data/adb/turbo-charge/webui.iptables` | 记录兜底规则所用的 iptables 路径（卸载时用它 `-D`） |
 
-## HTTP 接口（自用，局域网内可调）
+> ⚠️ `/data/adb/turbo-charge` 这个目录名**不能改**：原版预编译二进制 `turbo-charge` 内部硬编码了该路径（`option.txt` / `bypass_charge.txt`），改名会导致核心直接读不到配置。项目更名只改了模块 id 与显示名，配置目录保持原样。
+
+## HTTP 接口（仅本机可访问）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -112,31 +139,33 @@ http://手机IP:8080
 | GET | `/api/log?n=200&src=cur\|old` | 读取日志（n 钳制 10–2000） |
 | POST | `/api/log/clear` | 清空当前日志 |
 
-> 接口无鉴权，仅监听本机 8080 端口；请勿把 8080 暴露到公网。
+> 接口无鉴权，因为端口已限制为本机回环 + iptables 拦截外部来源，局域网内其它设备无法访问。
 
 ## 与原版差异
 
 1. 内置 WebUI 控制面板（概览 / 参数 / 日志 / 回滚 / 恢复默认）。
 2. busybox 自动探测，兼容 KernelSU / KernelSU-Next / Magisk / 系统 busybox，无需额外安装。
-3. 版本号 `v68-2`，与原版 `v68` 区分。
-4. 原版所有功能与配置格式保持不变，老用户升级无感。
+3. **WebUI 仅监听 `127.0.0.1`**，并用 iptables 兜底拦截所有非本机来源，卸载时自动撤销规则。
+4. 模块更名为 **充电调控**，id 为 `charge-control`，版本号从 **v1.0** 重新计数。
+5. 原版核心功能与配置格式保持不变。
 
 ## 仓库结构
 
 ```
-turbo-charge-webui/
+charge-control/
 ├── README.md                     # 本文件
 ├── LICENSE                       # AGPLv3
+├── update.json                   # 模块管理器在线更新清单
 └── module/                       # 模块源码（与 zip 内容一致）
-    ├── module.prop               # 模块信息（id = turbo-charge）
+    ├── module.prop               # 模块信息（id = charge-control）
     ├── customize.sh              # 安装脚本（SKIPUNZIP 自解压）
     ├── http_api.sh               # WebUI 后端（nc + sh 实现的 HTTP API）
     ├── README.md                 # 模块内说明
     ├── Changelog_All.md          # 更新日志
     ├── common/
     │   ├── turbo-charge          # 原版主程序（aarch64 预编译）
-    │   ├── service.sh            # 开机启动 + WebUI 看门狗
-    │   ├── uninstall.sh          # 卸载清理
+    │   ├── service.sh            # 开机启动 + WebUI 看门狗 + 端口加固
+    │   ├── uninstall.sh          # 卸载清理（含 iptables 规则撤销）
     │   ├── option.txt            # 默认配置模板
     │   └── bypass_charge.txt     # 伪旁路包名列表
     ├── META-INF/com/google/android/
@@ -146,11 +175,12 @@ turbo-charge-webui/
         └── index.html            # 单文件控制面板（无外链、无 CDN）
 ```
 
-> `common/turbo-charge` 为原版作者提供的预编译二进制，本仓库不改动其逻辑。
+> `common/turbo-charge` 为原版作者提供的预编译二进制，本仓库不改动其逻辑；
+> 该二进制内部硬编码了配置目录 `/data/adb/turbo-charge`，所以目录名保持原样。
 
 ## 开源协议
 
 本二改版遵循原项目的 **AGPLv3** 开源协议。
 原版作者：诺鸡鸭（酷安 [@诺鸡鸭](https://www.coolapk.com/u/1145497)）· [GitHub](https://github.com/chase535/turbo-charge)
 
-二改版仓库：<https://github.com/Yxlan-yu/turbo-charge-webui>
+二改版仓库：<https://github.com/Yxlan-yu/charge-control>

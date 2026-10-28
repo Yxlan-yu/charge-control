@@ -86,8 +86,10 @@ print_info()
     ui_print " "
     ui_print " - 可修改/data/adb/turbo-charge/option.txt来更改一些参数，即时生效"
     ui_print " - log文件为同目录的log.txt，包含文件检测、配置更改等信息"
-    ui_print " - 图形化面板：浏览器打开 http://手机IP:8080"
-    ui_print "   （KernelSU/Magisk 管理器里点模块的“打开”也可直接进入）"
+    ui_print " - 图形化面板：KernelSU / Magisk 管理器里点模块的“打开”即可进入"
+    ui_print " - 面板只监听本机 127.0.0.1，局域网内其它设备无法访问，更安全"
+    ui_print "   电脑上调试请先执行 adb forward tcp:8080 tcp:8080，"
+    ui_print "   再用浏览器打开 http://127.0.0.1:8080"
     ui_print " - 面板支持参数在线修改（自动保存）、功率温度走势、日志查看、配置回滚"
     ui_print " - 修改配置会先备份为 option.txt.bak，可在面板里一键回滚"
     ui_print " "
@@ -137,6 +139,12 @@ check_old_option()
 
 on_install()
 {
+    # 更名迁移：清掉旧 id(turbo-charge) 的模块目录，避免两份 service.sh 抢 8080 端口；
+    # 配置目录 /data/adb/turbo-charge 保持不动，老配置继续生效
+    if [[ -d /data/adb/modules/turbo-charge || -d /data/adb/modules_update/turbo-charge ]]; then
+        ui_print " 检测到旧版 turbo-charge 模块目录，正在清理（配置目录保留）"
+        rm -rf /data/adb/modules/turbo-charge /data/adb/modules_update/turbo-charge
+    fi
     # 先留一份出厂默认配置（check_old_option 会把旧配置合并进 TMPDIR/option.txt）
     cp -af "${TMPDIR}/option.txt" "${TMPDIR}/option.txt.default"
     if [[ -f /data/adb/turbo-charge/option.txt ]]; then

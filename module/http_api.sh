@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # =========================================================
-#  Turbo Charge WebUI · HTTP API  (v68-2)
+#  充电调控 WebUI · HTTP API  (v1.0)
 #  用法: http_api.sh <MODDIR> <PORT>
 #  由 busybox nc -lk -e 为每个连接调用一次
 #
@@ -271,7 +271,7 @@ api_config_get() {
 api_config_save() {
     # $1 = raw body (K=V&...)
     if [ ! -f "$OPT_FILE" ]; then
-        http_err 400 "Bad Request" "option.txt 不存在，请先安装 turbo-charge 模块"
+        http_err 400 "Bad Request" "option.txt 不存在，请先安装 charge-control 模块"
         return
     fi
     BODY_FILE="$TCP_DIR/.body.tmp"

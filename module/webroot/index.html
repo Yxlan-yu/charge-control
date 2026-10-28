@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Turbo Charge · 控制台</title>
+<link rel="stylesheet" href="https://mui.kernelsu.org/internal/insets.css" media="not all" onload="this.media='all'">
+<style>
+:root{
+  --bg:#F2F3F5; --card:#FFFFFF; --card2:#F4F5F7; --hl:#EDEFF3;
+  --txt:#14161A; --txt2:#6B7280; --txt3:#9AA1AC;
+  --line:rgba(0,0,0,.065); --line2:rgba(0,0,0,.10);
+  --accent:#3482FF; --accent2:#5B95FF; --soft:rgba(52,130,255,.10);
+  --ok:#2FBF5B; --warn:#FF9F0A; --bad:#FF453A;
+  --seg-bg:#E9EBEF; --seg-ind:#FFFFFF;
+  --sw-off:#D5D9E0;
+  --shadow:0 1px 2px rgba(16,24,40,.04), 0 6px 20px rgba(16,24,40,.05);
+  --shadow2:0 8px 30px rgba(16,24,40,.10);
+  --bar:rgba(242,243,245,.82);
+}
+html[data-theme="dark"]{
+  --bg:#000000; --card:#191A1C; --card2:#232427; --hl:#2B2D31;
+  --txt:#F2F3F5; --txt2:#A1A7B3; --txt3:#71767F;
+  --line:rgba(255,255,255,.075); --line2:rgba(255,255,255,.13);
+  --accent:#4A8DFF; --accent2:#6BA4FF; --soft:rgba(74,141,255,.17);
+  --ok:#32D74B; --warn:#FFD60A; --bad:#FF6961;
+  --seg-bg:#1B1C1F; --seg-ind:#393C42;
+  --sw-off:#3A3D43;
+  --shadow:0 1px 2px rgba(0,0,0,.5);
+  --shadow2:0 10px 34px rgba(0,0,0,.6);
+  --bar:rgba(0,0,0,.78);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--txt); font-size:15px; line-height:1.45;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","MiSans","HarmonyOS Sans SC","PingFang SC","Noto Sans SC","Microsoft YaHei UI",sans-serif;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  transition:background .25s ease,color .25s ease;
+  overscroll-behavior-y:none;
+}
+.ic{width:20px;height:20px;display:block;fill:currentColor;flex:0 0 auto}
+.wrap{max-width:760px;margin:0 auto;padding:0 15px}
+/* ---------- appbar ---------- */
+.appbar{
+  position:sticky;top:0;z-index:30;
+  padding-top:calc(9px + var(--window-inset-top, env(safe-area-inset-top, 0px)));
+  background:var(--bar);
+  -webkit-backdrop-filter:saturate(180%) blur(22px);
+  backdrop-filter:saturate(180%) blur(22px);
+  border-bottom:.5px solid transparent;
+  transition:border-color .2s,background .25s;
+}
+.appbar.solid{border-bottom-color:var(--line)}
+.appbar-in{display:flex;align-items:center;gap:10px;padding:2px 0 9px}
+.brand{display:flex;align-items:center;gap:11px;min-width:0;flex:1}
+.logo{
+  width:38px;height:38px;border-radius:12px;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;color:#fff;
+  background:linear-gradient(140deg,#5B95FF,#2E6FF0);
+  box-shadow:0 4px 12px rgba(52,130,255,.32);
+}
+.logo .ic{width:21px;height:21px}
+.brand-txt{min-width:0}
+.brand-txt h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand-txt p{margin:1px 0 0;font-size:11.5px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.acts{display:flex;gap:8px;flex:0 0 auto}
+.iconbtn{
+  width:36px;height:36px;border-radius:50%;border:0;cursor:pointer;
+  background:var(--card);color:var(--txt2);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:var(--shadow);transition:transform .12s,color .2s,background .2s;
+}
+.iconbtn:active{transform:scale(.92)}
+.iconbtn.spin .ic{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* ---------- segmented ---------- */
+.segbar{padding:0 0 10px}
+.seg{position:relative;display:grid;grid-template-columns:repeat(3,1fr);background:var(--seg-bg);border-radius:999px;padding:3px}
+.seg button{
+  position:relative;z-index:2;border:0;background:transparent;font:inherit;
+  font-size:13.5px;font-weight:600;color:var(--txt2);padding:7px 0;border-radius:999px;
+  cursor:pointer;transition:color .22s;
+}
+.seg button.on{color:var(--txt)}
+.seg-ind{
+  position:absolute;z-index:1;top:3px;left:3px;height:calc(100% - 6px);
+  width:calc((100% - 6px)/3);border-radius:999px;background:var(--seg-ind);
+  box-shadow:0 1px 3px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04);
+  transition:transform .3s cubic-bezier(.22,.9,.28,1);
+}
+/* ---------- page ---------- */
+main{padding-top:14px;padding-bottom:calc(30px + var(--window-inset-bottom, env(safe-area-inset-bottom, 0px)))}
+.page{display:none}
+.page.on{display:block;animation:fade .24s ease both}
+@keyframes fade{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+.stitle{font-size:12.5px;font-weight:600;color:var(--txt3);letter-spacing:.03em;margin:20px 7px 8px}
+.stitle.first{margin-top:2px}
+.card{background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:4px 16px;margin:0 0 12px}
+.card.pad{padding:16px}
+.card.flush{padding:0;overflow:hidden}
+/* ---------- rows ---------- */
+.row{display:flex;align-items:center;gap:13px;padding:13px 0;min-height:56px}
+.row+.row{border-top:1px solid var(--line)}
+.row .rx{flex:1;min-width:0}
+.row .rt{font-size:15px;font-weight:500;letter-spacing:-.005em}
+.row .rh{font-size:12px;color:var(--txt3);margin-top:3px;line-height:1.35}
+.row .rv{font-size:13.5px;color:var(--txt2);font-variant-numeric:tabular-nums;flex:0 0 auto;max-width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sw{
+  position:relative;width:50px;height:30px;border-radius:999px;border:0;padding:0;
+  background:var(--sw-off);cursor:pointer;flex:0 0 auto;
+  transition:background .22s ease;
+}
+.sw::after{
+  content:"";position:absolute;top:2px;left:2px;width:26px;height:26px;border-radius:50%;
+  background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.25);
+  transition:transform .22s cubic-bezier(.3,.9,.3,1);
+}
+.sw[aria-checked="true"]{background:var(--accent)}
+.sw[aria-checked="true"]::after{transform:translateX(20px)}
+.sw:disabled{opacity:.42}
+/* ---------- hero ---------- */
+.hero{display:flex;align-items:center;gap:6px;padding:17px 2px}
+.ring{position:relative;width:106px;height:106px;flex:0 0 auto}
+.ring svg{display:block;transform:rotate(-90deg)}
+.ring .rt2{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.ring .rv2{font-size:23px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.ring .ru2{font-size:10px;color:var(--txt3);margin-top:4px;letter-spacing:.06em}
+.hero-main{flex:1;min-width:0;padding-left:16px}
+.pw{display:flex;align-items:baseline;gap:4px;line-height:1}
+.pw b{font-size:35px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.pw span{font-size:15px;font-weight:600;color:var(--txt2)}
+.hero-sub{font-size:12.5px;color:var(--txt2);margin-top:7px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2.5px 8px;border-radius:999px;background:var(--soft);color:var(--accent)}
+.badge.gray{background:var(--card2);color:var(--txt2)}
+.badge.ok{background:rgba(47,191,91,.12);color:var(--ok)}
+.mini{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);margin:0 -16px;padding:12px 0 14px}
+.mini>div{text-align:center;position:relative}
+.mini>div+div::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:1px;background:var(--line)}
+.mini .mv{font-size:17px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.mini .mv i{font-size:11px;font-style:normal;color:var(--txt3);font-weight:500;margin-left:2px}
+.mini .ml{font-size:11px;color:var(--txt3);margin-top:3px}
+/* ---------- chart ---------- */
+.chart-head{display:flex;align-items:center;gap:12px;padding:14px 0 2px;flex-wrap:wrap}
+.chart-head .ct{font-size:14.5px;font-weight:600;flex:1;min-width:90px}
+.lg{display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--txt3);font-variant-numeric:tabular-nums}
+.lg b{font-weight:600;color:var(--txt2)}
+.lg i{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px}
+.chart{position:relative;height:130px;margin:6px 0 10px}
+.chart canvas{width:100%;height:100%;display:block}
+/* ---------- fields ---------- */
+.field{display:flex;align-items:center;gap:12px;padding:12px 0;min-height:58px}
+.field+.field{border-top:1px solid var(--line)}
+.field .fx{flex:1;min-width:0}
+.field .fl{font-size:15px;font-weight:500}
+.field .fh{font-size:11.5px;color:var(--txt3);margin-top:3px;line-height:1.35}
+.inp{display:flex;align-items:center;gap:5px;background:var(--card2);border:1px solid transparent;border-radius:12px;padding:0 10px;height:38px;transition:border-color .18s,background .18s}
+.inp:focus-within{border-color:var(--accent);background:var(--card)}
+.inp input{
+  width:74px;border:0;background:transparent;outline:none;padding:0;margin:0;
+  color:var(--txt);font:inherit;font-size:16px;font-weight:600;text-align:right;
+  font-variant-numeric:tabular-nums;-moz-appearance:textfield;appearance:textfield;
+}
+.inp input::-webkit-outer-spin-button,.inp input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.inp input:disabled{color:var(--txt3)}
+.inp .u{font-size:11.5px;color:var(--txt3);min-width:12px;text-align:left}
+.inp.dis{opacity:.45}
+/* ---------- textarea / buttons ---------- */
+.ta{
+  width:100%;min-height:104px;resize:vertical;border:1px solid transparent;border-radius:14px;
+  background:var(--card2);color:var(--txt);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12.5px;line-height:1.6;padding:11px 12px;outline:none;transition:border-color .18s;
+}
+.ta:focus{border-color:var(--accent);background:var(--card)}
+.btnrow{display:flex;gap:9px;flex-wrap:wrap;margin:2px 0 4px}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;height:41px;padding:0 16px;
+  border:0;border-radius:13px;background:var(--card2);color:var(--txt);
+  font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;
+  transition:transform .12s ease,opacity .2s,background .2s;
+}
+.btn .ic{width:16px;height:16px}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45;pointer-events:none}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.ghost{background:transparent;color:var(--accent);box-shadow:inset 0 0 0 1px var(--line2)}
+.btn.danger{background:transparent;color:var(--bad);box-shadow:inset 0 0 0 1px var(--line2)}
+.btn.grow{flex:1}
+.saveline{display:flex;align-items:center;justify-content:center;gap:7px;font-size:12px;color:var(--txt3);padding:10px 0 2px;min-height:32px}
+.saveline .dot{width:6px;height:6px;border-radius:50%;background:var(--txt3);flex:0 0 auto;transition:background .2s}
+.saveline.busy .dot{background:var(--warn);animation:pulse 1s ease-in-out infinite}
+.saveline.ok .dot{background:var(--ok)}
+.saveline.err .dot{background:var(--bad)}
+.saveline.err{color:var(--bad)}
+@keyframes pulse{50%{opacity:.28}}
+/* ---------- chips / log ---------- */
+.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip{
+  border:0;background:var(--card2);color:var(--txt2);font:inherit;font-size:12.5px;font-weight:600;
+  padding:7px 13px;border-radius:999px;cursor:pointer;transition:background .2s,color .2s;
+}
+.chip.on{background:var(--soft);color:var(--accent)}
+.logbox{
+  background:var(--card2);border-radius:15px;padding:12px 13px;margin:0;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.6;
+  white-space:pre-wrap;word-break:break-word;overflow:auto;max-height:54vh;min-height:120px;
+  color:var(--txt2);-webkit-overflow-scrolling:touch;
+}
+.logbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 0 10px}
+.logbar .sp{flex:1}
+/* ---------- notes ---------- */
+.note{
+  display:flex;gap:9px;align-items:flex-start;background:var(--card2);border-radius:14px;
+  padding:11px 13px;font-size:12px;line-height:1.5;color:var(--txt2);margin:0 0 12px;
+}
+.note .ic{width:15px;height:15px;margin-top:1px;color:var(--txt3)}
+.note.warn{background:rgba(255,159,10,.12);color:#9A6300}
+html[data-theme="dark"] .note.warn{color:#FFD60A}
+.note.warn .ic{color:inherit}
+/* ---------- details ---------- */
+details.card{padding:0}
+details.card>summary{
+  list-style:none;cursor:pointer;padding:15px 16px;display:flex;align-items:center;gap:10px;
+  font-size:14.5px;font-weight:600;
+}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary .chev{margin-left:auto;color:var(--txt3);transition:transform .22s}
+details.card[open]>summary .chev{transform:rotate(90deg)}
+details.card>summary .chev .ic{width:15px;height:15px}
+.dbody{padding:0 16px 14px;border-top:1px solid var(--line);margin-top:-1px}
+.kv{display:flex;gap:12px;padding:9px 0;font-size:12.5px;align-items:baseline}
+.kv+.kv{border-top:1px solid var(--line)}
+.kv .k{color:var(--txt3);flex:0 0 38%}
+.kv .v{color:var(--txt2);flex:1;min-width:0;word-break:break-all;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;text-align:right}
+/* ---------- toast ---------- */
+.toast{
+  position:fixed;left:50%;bottom:calc(24px + var(--window-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  transform:translate(-50%,16px);z-index:99;opacity:0;pointer-events:none;
+  background:rgba(28,30,34,.95);color:#fff;font-size:13px;font-weight:500;
+  padding:10px 18px;border-radius:999px;max-width:84vw;text-align:center;
+  box-shadow:0 8px 26px rgba(0,0,0,.28);
+  transition:opacity .22s ease,transform .22s ease;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+/* ---------- boot overlay ---------- */
+.boot{
+  position:fixed;inset:0;z-index:80;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  transition:opacity .3s ease,visibility .3s;
+}
+.boot.hide{opacity:0;visibility:hidden}
+.boot .ring2{
+  width:30px;height:30px;border-radius:50%;border:2.5px solid var(--line2);
+  border-top-color:var(--accent);animation:spin .8s linear infinite;
+}
+.boot p{margin:0;font-size:13px;color:var(--txt3)}
+@media (min-width:560px){
+  .mini .mv{font-size:18px}
+  .chart{height:150px}
+}
+</style>
+</head>
+<body>
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M11 21h-1l1-7H7.5c-.6 0-.57-.33-.38-.67.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.5 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm-1-6h2v3h-2V1zm0 19h2v3h-2v-3zM1 11h3v2H1v-2zm19 0h3v2h-3v-2zM4.22 5.64l1.42-1.42 2.12 2.12-1.41 1.42-2.13-2.12zm12.02 12.02 1.42-1.41 2.12 2.12-1.41 1.41-2.13-2.12zM5.64 19.78l-1.42-1.42 2.12-2.12 1.42 1.41-2.12 2.13zM17.66 7.76l-1.42-1.42 2.12-2.12 1.42 1.41-2.12 2.13z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12.3 3a9 9 0 1 0 8.7 11.3 7 7 0 0 1-8.7-8.7c0-.9 0-1.8 0-2.6z"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2v16a8 8 0 0 1 0-16z"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9.29 6.71 14.58 12l-5.29 5.29 1.41 1.42L17.41 12l-6.7-6.71z"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 10.6V6h-2v7.4l5.2 3.1 1-1.7-4.2-2.2z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4zm-1 15-4-4 1.4-1.4L11 13.2l4.6-4.6L17 10l-6 6z"/></symbol>
+</svg>
+
+<div class="toast" id="toast"></div>
+
+<header class="appbar" id="appbar">
+  <div class="wrap">
+    <div class="appbar-in">
+      <div class="brand">
+        <div class="logo"><svg class="ic"><use href="#i-bolt"/></svg></div>
+        <div class="brand-txt">
+          <h1>Turbo Charge</h1>
+          <p id="brandSub">正在连接模块…</p>
+        </div>
+      </div>
+      <div class="acts">
+        <button class="iconbtn" id="btnTheme" title="切换主题" aria-label="切换主题"><svg class="ic"><use href="#i-auto"/></svg></button>
+        <button class="iconbtn" id="btnRefresh" title="刷新" aria-label="刷新"><svg class="ic"><use href="#i-refresh"/></svg></button>
+      </div>
+    </div>
+    <div class="segbar">
+      <div class="seg" id="seg">
+        <span class="seg-ind" id="segInd"></span>
+        <button data-tab="home" class="on">概览</button>
+        <button data-tab="cfg">参数</button>
+        <button data-tab="log">日志</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ================= 概览 ================= -->
+  <section class="page on" id="pg-home">
+
+    <div class="card">
+      <div class="hero">
+        <div class="ring">
+          <svg width="106" height="106" viewBox="0 0 106 106" aria-hidden="true">
+            <circle cx="53" cy="53" r="44" fill="none" stroke="var(--line2)" stroke-width="9"/>
+            <circle id="ringArc" cx="53" cy="53" r="44" fill="none" stroke="url(#gradRing)" stroke-width="9"
+                    stroke-linecap="round" stroke-dasharray="276.46" stroke-dashoffset="276.46"
+                    style="transition:stroke-dashoffset .6s cubic-bezier(.3,.9,.3,1)"/>
+            <defs>
+              <linearGradient id="gradRing" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#5B95FF"/><stop offset="1" stop-color="#2E6FF0"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <div class="rt2"><div class="rv2" id="hCap">--</div><div class="ru2">电量</div></div>
+        </div>
+        <div class="hero-main">
+          <div class="pw"><b id="hPower">--</b><span>W</span></div>
+          <div class="hero-sub">
+            <span class="badge gray" id="hState">等待数据</span>
+            <span id="hType">--</span>
+          </div>
+        </div>
+      </div>
+      <div class="mini">
+        <div><div class="mv" id="hTemp">--<i>℃</i></div><div class="ml">电池温度</div></div>
+        <div><div class="mv" id="hCur">--<i>mA</i></div><div class="ml">充电电流</div></div>
+        <div><div class="mv" id="hVol">--<i>V</i></div><div class="ml">电池电压</div></div>
+      </div>
+    </div>
+
+    <div class="card pad">
+      <div class="chart-head">
+        <div class="ct">实时走势</div>
+        <div class="lg">
+          <span><i style="background:var(--accent)"></i>功率 <b id="lgP">--</b> W</span>
+          <span><i style="background:var(--warn)"></i>温度 <b id="lgT">--</b> ℃</span>
+        </div>
+      </div>
+      <div class="chart"><canvas id="cv"></canvas></div>
+    </div>
+
+    <div class="stitle">快捷开关</div>
+    <div class="card">
+      <div class="row">
+        <div class="rx"><div class="rt">强制显示 28℃</div><div class="rh">屏蔽真实高温读数，避免系统因温度降频</div></div>
+        <button class="sw" role="switch" aria-checked="false" data-key="FORCE_TEMP" aria-label="强制显示 28℃"></button>
+      </div>
+      <div class="row">
+        <div class="rx"><div class="rt">温度控制</div><div class="rh">超过阈值时自动降低充电电流</div></div>
+        <button class="sw" role="switch" aria-checked="false" data-key="TEMP_CTRL" aria-label="温度控制"></button>
+      </div>
+      <div class="row">
+        <div class="rx"><div class="rt">电量控制</div><div class="rh">到设定电量停充，回落到阈值再充</div></div>
+        <button class="sw" role="switch" aria-checked="false" data-key="POWER_CTRL" aria-label="电量控制"></button>
+      </div>
+      <div class="row">
+        <div class="rx"><div class="rt">旁路供电</div><div class="rh">前台为指定应用时停充，直接由充电器供电</div></div>
+        <button class="sw" role="switch" aria-checked="false" data-key="BYPASS_CHARGE" aria-label="旁路供电"></button>
+      </div>
+    </div>
+
+    <div class="stitle">设备信息</div>
+    <div class="card">
+      <div class="row"><div class="rx"><div class="rt">机型</div></div><div class="rv" id="devModel">--</div></div>
+      <div class="row"><div class="rx"><div class="rt">系统版本</div></div><div class="rv" id="devAndroid">--</div></div>
+      <div class="row"><div class="rx"><div class="rt">模块版本</div></div><div class="rv" id="devVer">--</div></div>
+      <div class="row"><div class="rx"><div class="rt">服务端口</div></div><div class="rv" id="devPort">--</div></div>
+      <div class="row"><div class="rx"><div class="rt">运行时长</div></div><div class="rv" id="devUp">--</div></div>
+    </div>
+
+    <details class="card" id="diag">
+      <summary>
+        <svg class="ic" style="width:17px;height:17px;color:var(--txt3)"><use href="#i-shield"/></svg>
+        环境诊断
+        <span class="chev"><svg class="ic"><use href="#i-chev"/></svg></span>
+      </summary>
+      <div class="dbody" id="diagBody"><div class="kv"><div class="k">加载中</div><div class="v">--</div></div></div>
+    </details>
+
+    <div class="saveline" id="homeNote" style="opacity:.75"><span class="dot"></span><span>数据每 2 秒自动刷新</span></div>
+  </section>
+
+  <!-- ================= 参数 ================= -->
+  <section class="page" id="pg-cfg">
+    <div id="cfgWarn"></div>
+
+    <div class="stitle first">充电节奏</div>
+    <div class="card" id="g-cycle"></div>
+
+    <div class="stitle">温度控制</div>
+    <div class="card" id="g-temp"></div>
+
+    <div class="stitle">电量控制</div>
+    <div class="card" id="g-power"></div>
+
+    <div class="stitle">阶梯式充电</div>
+    <div class="card" id="g-step"></div>
+
+    <div class="stitle">旁路供电</div>
+    <div class="card">
+      <div class="field" style="display:block;padding-top:14px">
+        <div class="fl" style="margin-bottom:7px">应用包名白名单</div>
+        <textarea class="ta" id="bypassTa" spellcheck="false" placeholder="每行一个包名，例如：&#10;com.tencent.mm&#10;com.miHoYo.Yuanshen"></textarea>
+        <div class="fh" style="font-size:11.5px;color:var(--txt3);margin-top:7px;line-height:1.5">这些应用在前台时会停止充电并直接使用充电器供电，每行一个，支持注释（#）</div>
+      </div>
+      <div class="btnrow" style="padding-bottom:14px">
+        <button class="btn ghost grow" id="btnBypassSave"><svg class="ic"><use href="#i-shield"/></svg>保存白名单</button>
+      </div>
+    </div>
+
+    <div class="stitle">配置管理</div>
+    <div class="btnrow">
+      <button class="btn grow" id="btnRollback">回滚上一次</button>
+      <button class="btn danger grow" id="btnDefault">恢复默认</button>
+    </div>
+
+    <div class="saveline" id="saveLine"><span class="dot"></span><span id="saveTxt">修改后自动保存</span></div>
+  </section>
+
+  <!-- ================= 日志 ================= -->
+  <section class="page" id="pg-log">
+    <div class="card pad">
+      <div class="logbar" style="padding-top:2px">
+        <div class="chips" id="logSrc">
+          <button class="chip on" data-src="cur">本次启动</button>
+          <button class="chip" data-src="old">上次启动</button>
+        </div>
+        <div class="sp"></div>
+        <button class="iconbtn" id="btnLogRefresh" title="刷新日志" aria-label="刷新日志"><svg class="ic"><use href="#i-refresh"/></svg></button>
+      </div>
+      <div class="logbar" style="padding:0 0 11px">
+        <div class="chips" id="logLines">
+          <button class="chip" data-n="100">100</button>
+          <button class="chip on" data-n="200">200</button>
+          <button class="chip" data-n="500">500</button>
+          <button class="chip" data-n="1000">1000</button>
+        </div>
+        <div class="sp"></div>
+        <button class="chip" id="btnAuto">自动刷新</button>
+      </div>
+      <pre class="logbox" id="logBox">加载中…</pre>
+      <div class="btnrow" style="margin-top:11px">
+        <button class="btn grow" id="btnLogCopy"><svg class="ic"><use href="#i-copy"/></svg>复制</button>
+        <button class="btn danger" id="btnLogClear"><svg class="ic"><use href="#i-trash"/></svg>清空</button>
+      </div>
+    </div>
+    <div class="note">
+      <svg class="ic"><use href="#i-info"/></svg>
+      <span>日志位于模块数据目录 <code>log.txt</code>，每次开机时旧日志会自动改名保留为 <code>log.txt.old</code>。</span>
+    </div>
+  </section>
+
+</main>
+
+<div class="boot" id="boot">
+  <div class="ring2"></div>
+  <p>正在连接模块…</p>
+</div>
+<script>
+(function () {
+  'use strict';
+
+  /* ============ 0. 桥接模式（被外层页面以 iframe 嵌入时） ============ */
+  if (window.parent !== window && /(^|[?&])bridge=1(&|$)/.test(location.search)) {
+    window.addEventListener('message', function (ev) {
+      var d = ev.data;
+      if (!d || d.__tcBridge !== 'req') return;
+      var opt = { method: d.method || 'GET', cache: 'no-store' };
+      if (d.ctype) opt.headers = { 'Content-Type': d.ctype };
+      if (d.method === 'POST') opt.body = d.body || '';
+      fetch(location.origin + d.path, opt).then(function (r) {
+        return r.text().then(function (t) {
+          parent.postMessage({ __tcBridge: 'res', id: d.id, ok: r.ok, body: t, error: r.ok ? '' : ('HTTP ' + r.status) }, '*');
+        });
+      }).catch(function (e) {
+        parent.postMessage({ __tcBridge: 'res', id: d.id, ok: false, body: '', error: String(e && e.message || e) }, '*');
+      });
+    });
+    return;
+  }
+
+  /* ============ 1. 基础工具 ============ */
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  var THEME_KEY = 'tc.theme';
+  var N_POINT = 90;
+
+  var S = {
+    mode: '', base: '', ready: false, tab: 'home',
+    status: null, cfg: {}, def: {}, info: null,
+    hist: [], scale: {},
+    logSrc: 'cur', logN: 200, logAuto: false,
+    themePref: 'auto', theme: 'light',
+    saveTimer: null, saveBusy: false, saveDirty: false,
+    failCount: 0, bypassTimer: null
+  };
+  window.__tc = S;
+
+  function toast(msg, ms) {
+    var el = $('#toast');
+    el.textContent = msg;
+    el.classList.add('on');
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.classList.remove('on'); }, ms || 2000);
+  }
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function nowStr() {
+    var d = new Date();
+    return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+  }
+  function num(v, d) {
+    if (v === null || v === undefined || v === '' || isNaN(Number(v))) return '--';
+    return Number(v).toFixed(d === undefined ? 0 : d);
+  }
+  function esc(s) {
+    return String(s === null || s === undefined ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function cssVar(name, fb) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name);
+    v = (v || '').trim();
+    return v || fb;
+  }
+  function toRGBA(c, a) {
+    c = String(c || '').trim();
+    if (c.charAt(0) === '#') {
+      var h = c.slice(1);
+      if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+      var n = parseInt(h, 16);
+      if (!isNaN(n)) return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    if (c.indexOf('rgb(') === 0) return c.replace('rgb(', 'rgba(').replace(')', ',' + a + ')');
+    return 'rgba(52,130,255,' + a + ')';
+  }
+
+  /* ============ 2. 主题 ============ */
+  function resolveTheme() {
+    var p = S.themePref;
+    var dark = p === 'dark' || (p === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    S.theme = dark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', S.theme);
+    var href = p === 'auto' ? '#i-auto' : (p === 'light' ? '#i-sun' : '#i-moon');
+    var btn = $('#btnTheme');
+    if (btn) btn.innerHTML = '<svg class="ic"><use href="' + href + '"/></svg>';
+    drawChart();
+  }
+  function setTheme(p) {
+    S.themePref = p;
+    try { localStorage.setItem(THEME_KEY, p); } catch (e) { }
+    resolveTheme();
+  }
+  (function initTheme() {
+    var p = 'auto';
+    try { p = localStorage.getItem(THEME_KEY) || 'auto'; } catch (e) { }
+    if (p !== 'auto' && p !== 'light' && p !== 'dark') p = 'auto';
+    S.themePref = p;
+    resolveTheme();
+    if (window.matchMedia) {
+      var mq = window.matchMedia('(prefers-color-scheme: dark)');
+      var on = function () { if (S.themePref === 'auto') resolveTheme(); };
+      if (mq.addEventListener) mq.addEventListener('change', on);
+      else if (mq.addListener) mq.addListener(on);
+    }
+  })();
+
+  /* ============ 3. 传输层 ============ */
+  function timeoutFetch(url, opt, ms) {
+    return new Promise(function (resolve, reject) {
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () { try { ctrl.abort(); } catch (e) { } }, ms || 8000);
+      var o = Object.assign({ cache: 'no-store' }, opt || {}, { signal: ctrl.signal });
+      fetch(url, o).then(function (r) { clearTimeout(timer); resolve(r); },
+        function (e) { clearTimeout(timer); reject(e); });
+    });
+  }
+
+  var bridgeFrame = null, bridgeSeq = 0, bridgePending = {};
+
+  function onBridgeMsg(ev) {
+    var d = ev.data;
+    if (!d || d.__tcBridge !== 'res') return;
+    var p = bridgePending[d.id];
+    if (!p) return;
+    delete bridgePending[d.id];
+    clearTimeout(p.timer);
+    if (d.ok) p.resolve(d.body);
+    else {
+      var e = new Error(d.error || '请求失败');
+      e.body = d.body;
+      p.reject(e);
+    }
+  }
+
+  function bridgeCall(path, opt) {
+    if (!bridgeFrame) {
+      bridgeFrame = document.createElement('iframe');
+      bridgeFrame.setAttribute('aria-hidden', 'true');
+      bridgeFrame.style.cssText = 'position:fixed;left:-20px;top:-20px;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+      bridgeFrame.src = 'http://127.0.0.1:8080/?bridge=1';
+      document.body.appendChild(bridgeFrame);
+      window.addEventListener('message', onBridgeMsg);
+    }
+    var id = ++bridgeSeq;
+    var method = (opt && opt.method) || 'GET';
+    var ctype = (opt && opt.headers && opt.headers['Content-Type']) || '';
+    return new Promise(function (resolve, reject) {
+      var p = { resolve: resolve, reject: reject, timer: null };
+      p.timer = setTimeout(function () { delete bridgePending[id]; reject(new Error('桥接超时')); }, 12000);
+      bridgePending[id] = p;
+      var send = function () {
+        try {
+          bridgeFrame.contentWindow.postMessage({
+            __tcBridge: 'req', id: id, path: path, method: method,
+            body: (opt && opt.body) || '', ctype: ctype
+          }, '*');
+        } catch (e) { clearTimeout(p.timer); delete bridgePending[id]; reject(e); }
+      };
+      if (bridgeFrame.getAttribute('data-ready') === '1') send();
+      else bridgeFrame.addEventListener('load', function () { bridgeFrame.setAttribute('data-ready', '1'); send(); }, { once: true });
+    });
+  }
+
+  function callText(path, opt) {
+    if (S.mode === 'bridge') return bridgeCall(path, opt);
+    return timeoutFetch(S.base + path, opt, 9000).then(function (r) {
+      return r.text().then(function (t) {
+        if (r.ok) return t;
+        var msg = 'HTTP ' + r.status;
+        try { var j = JSON.parse(t); if (j && j.error) msg = j.error; } catch (e) { }
+        var err = new Error(msg);
+        err.body = t;
+        throw err;
+      });
+    });
+  }
+  function callJSON(path, opt) {
+    return callText(path, opt).then(function (t) {
+      try { return JSON.parse(t); }
+      catch (e) { var err = new Error('返回格式异常'); err.body = t; throw err; }
+    });
+  }
+  function postForm(path, body) {
+    return callJSON(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8' },
+      body: body || ''
+    });
+  }
+
+  function probe(base) {
+    return timeoutFetch(base + '/api/ping', null, 2500).then(function (r) {
+      if (!r.ok) return null;
+      return r.text().then(function (t) {
+        try { var j = JSON.parse(t); return (j && j.ok) ? base : null; } catch (e) { return null; }
+      });
+    }).catch(function () { return null; });
+  }
+
+  function detect() {
+    var list = [];
+    if (/^https?:$/.test(location.protocol)) list.push(location.origin);
+    list.push('http://127.0.0.1:8080', 'http://localhost:8080');
+    var seen = {}, uniq = [];
+    list.forEach(function (b) { if (b && !seen[b]) { seen[b] = 1; uniq.push(b); } });
+    return Promise.all(uniq.map(probe)).then(function (res) {
+      for (var i = 0; i < res.length; i++) if (res[i]) return res[i];
+      return null;
+    });
+  }
+
+  /* ============ 4. 首次启动 ============ */
+  function hideBoot() {
+    var b = $('#boot');
+    if (b) b.classList.add('hide');
+  }
+  function bootFail(msg, sub) {
+    var b = $('#boot');
+    if (b) {
+      b.innerHTML = '<div style="text-align:center;padding:0 28px">' +
+        '<svg class="ic" style="width:34px;height:34px;color:var(--bad);margin:0 auto 12px"><use href="#i-warn"/></svg>' +
+        '<p style="color:var(--txt);font-size:14.5px;font-weight:600;margin-bottom:6px">' + esc(msg) + '</p>' +
+        '<p style="font-size:12.5px;line-height:1.6">' + esc(sub || '') + '</p>' +
+        '<button class="btn primary" id="bootRetry" style="margin:18px auto 0">重试</button></div>';
+      $('#bootRetry').onclick = function () { location.reload(); };
+    }
+    $('#brandSub').textContent = msg;
+  }
+
+  /* ============ 5. 状态 ============ */
+  var ST_MAP = { 'Charging': '充电中', 'Discharging': '放电中', 'Full': '已充满', 'Not charging': '未充电', 'Unknown': '未知' };
+  var TYPE_MAP = { 'USB': 'USB', 'USB_PD': 'USB-PD', 'AC': '充电器', 'Wireless': '无线', 'Unknown': '未知', '': '' };
+  var SW_LABEL = { FORCE_TEMP: '强制显示 28℃', TEMP_CTRL: '温度控制', POWER_CTRL: '电量控制', BYPASS_CHARGE: '旁路供电', STEP_CHARGING_DISABLED: '关闭阶梯充电' };
+
+  function renderStatus() {
+    var st = S.status;
+    if (!st) return;
+    var b = st.battery || {}, u = st.usb || {};
+
+    var cap = Number(b.capacity);
+    if (isFinite(cap) && cap >= 0) {
+      $('#hCap').textContent = cap + '%';
+      var off = 276.46 * (1 - Math.max(0, Math.min(100, cap)) / 100);
+      $('#ringArc').style.strokeDashoffset = off.toFixed(2);
+    } else {
+      $('#hCap').textContent = '--';
+    }
+
+    $('#hPower').textContent = num(b.powerW, 2);
+    var t = Number(b.temp) / 10;
+    $('#hTemp').innerHTML = (isFinite(t) && b.temp !== 0 ? t.toFixed(1) : '--') + '<i>℃</i>';
+    var cur = Math.abs(Number(b.current)) / 1000;
+    $('#hCur').innerHTML = (isFinite(cur) ? Math.round(cur) : '--') + '<i>mA</i>';
+    var vol = Number(b.voltage) / 1000000;
+    $('#hVol').innerHTML = (isFinite(vol) && vol > 0 ? vol.toFixed(2) : '--') + '<i>V</i>';
+
+    var badge = $('#hState');
+    var stTxt = ST_MAP[b.status] || b.status || '未知';
+    badge.textContent = stTxt;
+    badge.className = 'badge ' + (u.online ? (b.status === 'Charging' ? 'ok' : '') : 'gray');
+
+    var tp = TYPE_MAP[u.type];
+    $('#hType').textContent = u.online
+      ? (tp || u.type) + ' · ' + num(u.voltage / 1000000, 2) + 'V / ' + num(Math.abs(u.input_current) / 1000, 0) + 'mA'
+      : '未接电源';
+
+    var up = Number(st.uptime) || 0;
+    $('#devUp').textContent = up ? upText(up) : '--';
+    $('#devPort').textContent = st.port || '--';
+    if (st.module && st.module.version) $('#devVer').textContent = st.module.version;
+
+    // 走势
+    var pw = Number(b.powerW);
+    var tv = Number(b.temp) / 10;
+    if (isFinite(pw) && isFinite(tv) && b.temp !== 0) {
+      S.hist.push({ p: pw, t: tv });
+      if (S.hist.length > N_POINT) S.hist.shift();
+    }
+    $('#lgP').textContent = num(b.powerW, 2);
+    $('#lgT').textContent = (isFinite(tv) && b.temp !== 0) ? tv.toFixed(1) : '--';
+    drawChart();
+  }
+
+  function upText(sec) {
+    var d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
+    if (d) return d + ' 天 ' + h + ' 小时';
+    if (h) return h + ' 小时 ' + m + ' 分';
+    return m + ' 分钟';
+  }
+
+  /* ============ 6. 走势图 ============ */
+  var chartRaf = null;
+  function drawChart() {
+    var cv = $('#cv');
+    if (!cv || !cv.clientWidth) return;
+    var w = cv.clientWidth, h = cv.clientHeight;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var nw = Math.round(w * dpr), nh = Math.round(h * dpr);
+    if (cv.width !== nw || cv.height !== nh) { cv.width = nw; cv.height = nh; }
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    var lineC = cssVar('--line2', 'rgba(0,0,0,.1)');
+    var ac = cssVar('--accent', '#3482FF');
+    var wn = cssVar('--warn', '#FF9F0A');
+    var t3 = cssVar('--txt3', '#999');
+    var padT = 9, padB = 11, iw = w - 2, ih = h - padT - padB;
+
+    ctx.strokeStyle = lineC; ctx.lineWidth = 1;
+    for (var g = 0; g <= 3; g++) {
+      var gy = Math.round(padT + ih * g / 3) + .5;
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+    }
+
+    var hist = S.hist;
+    if (hist.length < 2) {
+      ctx.fillStyle = t3;
+      ctx.font = '12px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('正在采集数据…', w / 2, h / 2);
+      return;
+    }
+
+    var pmax = 5, tmin = 1e9, tmax = -1e9;
+    hist.forEach(function (d) {
+      if (d.p > pmax) pmax = d.p;
+      if (d.t < tmin) tmin = d.t;
+      if (d.t > tmax) tmax = d.t;
+    });
+    pmax *= 1.18;
+    if (tmax - tmin < 2) { var mid = (tmax + tmin) / 2; tmin = mid - 1; tmax = mid + 1; }
+    else { tmin -= .5; tmax += .5; }
+
+    var X = function (i) { return 1 + iw * (i / (N_POINT - 1)); };
+    var PY = function (v) { return padT + ih * (1 - Math.min(1, Math.max(0, v / pmax))); };
+    var TY = function (v) { return padT + ih * (1 - Math.min(1, Math.max(0, (v - tmin) / (tmax - tmin)))); };
+
+    // 功率面积
+    ctx.beginPath();
+    for (var i = 0; i < hist.length; i++) {
+      var x = X(i), y = PY(hist[i].p);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.lineTo(X(hist.length - 1), h - padB);
+    ctx.lineTo(X(0), h - padB);
+    ctx.closePath();
+    var grd = ctx.createLinearGradient(0, padT, 0, h - padB);
+    grd.addColorStop(0, toRGBA(ac, .26));
+    grd.addColorStop(1, toRGBA(ac, .01));
+    ctx.fillStyle = grd; ctx.fill();
+
+    // 功率线
+    ctx.beginPath();
+    for (var j = 0; j < hist.length; j++) {
+      var x2 = X(j), y2 = PY(hist[j].p);
+      if (j === 0) ctx.moveTo(x2, y2); else ctx.lineTo(x2, y2);
+    }
+    ctx.strokeStyle = ac; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // 温度线
+    ctx.beginPath();
+    for (var k = 0; k < hist.length; k++) {
+      var x3 = X(k), y3 = TY(hist[k].t);
+      if (k === 0) ctx.moveTo(x3, y3); else ctx.lineTo(x3, y3);
+    }
+    ctx.strokeStyle = wn; ctx.lineWidth = 1.7; ctx.setLineDash([4, 3]); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 末端点
+    var last = hist.length - 1;
+    ctx.beginPath(); ctx.arc(X(last), PY(hist[last].p), 3.1, 0, Math.PI * 2);
+    ctx.fillStyle = ac; ctx.fill();
+    ctx.beginPath(); ctx.arc(X(last), TY(hist[last].t), 2.6, 0, Math.PI * 2);
+    ctx.fillStyle = wn; ctx.fill();
+  }
+  function scheduleChart() {
+    if (chartRaf) return;
+    chartRaf = requestAnimationFrame(function () { chartRaf = null; drawChart(); });
+  }
+
+  /* ============ 7. 轮询 ============ */
+  var pollTimer = null;
+  function tick() {
+    clearTimeout(pollTimer);
+    if (document.hidden) { pollTimer = setTimeout(tick, 4000); return; }
+    callJSON('/api/status').then(function (st) {
+      S.status = st;
+      S.failCount = 0;
+      renderStatus();
+    }).catch(function (e) {
+      S.failCount++;
+      if (S.failCount >= 2) {
+        $('#hState').textContent = '连接中断';
+        $('#hState').className = 'badge';
+        $('#brandSub').textContent = '连接中断 · 点击右上角刷新';
+      }
+    }).then(function () {
+      pollTimer = setTimeout(tick, 2000);
+    });
+  }
+
+  /* ============ 8. 配置 ============ */
+  var FIELDS = [
+    { g: 'g-cycle', k: 'CYCLE_TIME', label: '循环间隔', unit: '秒', min: 1, max: 600, hint: '越长越省电，但更容易抢占充电协议导致反复断充' },
+    { g: 'g-cycle', k: 'CURRENT_MAX', label: '最大充电电流', unit: 'mA', div: 1000, min: 0, max: 200000, hint: '高于手机理论上限也不会有问题，保持默认即可' },
+    { g: 'g-temp', k: 'TEMP_MAX', label: '降流温度阈值', unit: '℃', min: 0, max: 100, hint: '电池达到此温度后开始限制充电电流' },
+    { g: 'g-temp', k: 'HIGHEST_TEMP_CURRENT', label: '高温时最大电流', unit: 'mA', div: 1000, min: 0, max: 200000, hint: '触发温度限制后允许的最大充电电流' },
+    { g: 'g-temp', k: 'RECHARGE_TEMP', label: '恢复快充温度', unit: '℃', min: 0, max: 100, hint: '温度回落到此值以下时恢复快充' },
+    { g: 'g-power', k: 'CHARGE_STOP', label: '停止充电电量', unit: '%', min: 0, max: 100, hint: '电量达到此值后停止充电' },
+    { g: 'g-power', k: 'CHARGE_START', label: '开始充电电量', unit: '%', min: 0, max: 100, hint: '电量低于此值后重新开始充电' },
+    { g: 'g-step', k: 'STEP_CHARGING_DISABLED_THRESHOLD', label: '关闭阶梯充电阈值', unit: '%', min: 0, max: 100, hint: '电量高于此值时关闭阶梯式充电' }
+  ];
+
+  function fieldById(k) {
+    for (var i = 0; i < FIELDS.length; i++) if (FIELDS[i].k === k) return FIELDS[i];
+    return null;
+  }
+  function toRaw(f, v) {
+    var n = Number(v);
+    if (v === '' || v === null || v === undefined || !isFinite(n)) return '';
+    var r = n / (f.div || 1);
+    return String(Math.round(r * 1000) / 1000);
+  }
+  function toStore(f, raw) {
+    if (raw === '') return '';
+    var n = Number(raw);
+    if (!isFinite(n)) return '';
+    return String(Math.round(n * (f.div || 1)));
+  }
+
+  function buildFields() {
+    var groups = {};
+    FIELDS.forEach(function (f) { (groups[f.g] = groups[f.g] || []).push(f); });
+    Object.keys(groups).forEach(function (gid) {
+      var el = document.getElementById(gid);
+      if (!el) return;
+      el.innerHTML = groups[gid].map(function (f) {
+        return '<div class="field">' +
+          '<div class="fx"><div class="fl">' + esc(f.label) + '</div>' +
+          '<div class="fh">' + esc(f.hint) + '</div></div>' +
+          '<label class="inp" id="wrap_' + f.k + '">' +
+          '<input id="in_' + f.k + '" type="number" inputmode="numeric" step="1" min="' + f.min + '" max="' + f.max + '" value="">' +
+          '<span class="u">' + esc(f.unit) + '</span></label></div>';
+      }).join('');
+    });
+    FIELDS.forEach(function (f) {
+      var inp = document.getElementById('in_' + f.k);
+      if (!inp) return;
+      inp.addEventListener('input', function () {
+        S.cfg[f.k] = toStore(f, inp.value);
+        setSaveState('busy', '保存中…');
+        clearTimeout(S.saveTimer);
+        S.saveTimer = setTimeout(doSave, 700);
+      });
+      inp.addEventListener('blur', function () {
+        var n = Number(inp.value);
+        if (inp.value === '' || !isFinite(n)) return;
+        if (n < f.min) n = f.min;
+        if (n > f.max) n = f.max;
+        inp.value = String(n);
+        S.cfg[f.k] = toStore(f, inp.value);
+      });
+    });
+  }
+
+  function syncCfgUI() {
+    FIELDS.forEach(function (f) {
+      var inp = document.getElementById('in_' + f.k);
+      if (!inp) return;
+      var v = S.cfg[f.k];
+      if (v === undefined || v === null) v = S.def[f.k];
+      inp.value = (v === undefined || v === null) ? '' : toRaw(f, v);
+    });
+    $$('.sw[data-key]').forEach(function (b) {
+      var v = S.cfg[b.dataset.key];
+      if (v === undefined || v === null) v = S.def[b.dataset.key];
+      b.setAttribute('aria-checked', (Number(v) ? 'true' : 'false'));
+    });
+  }
+
+  function setSaveState(cls, txt) {
+    var line = $('#saveLine');
+    if (!line) return;
+    line.className = 'saveline' + (cls ? ' ' + cls : '');
+    $('#saveTxt').textContent = txt;
+  }
+
+  function doSave() {
+    if (S.saveBusy) { S.saveDirty = true; return; }
+    var parts = [];
+    FIELDS.forEach(function (f) {
+      var v = S.cfg[f.k];
+      if (v !== undefined && v !== '' && v !== null) parts.push(f.k + '=' + encodeURIComponent(v));
+    });
+    if (!parts.length) { setSaveState('', '修改后自动保存'); return; }
+    S.saveBusy = true;
+    postForm('/api/config', parts.join('&')).then(function (j) {
+      if (j && j.ignored && j.ignored.length) toast('已忽略无效项：' + j.ignored.join('、'), 2600);
+      setSaveState('ok', '已保存 · ' + nowStr());
+    }).catch(function (e) {
+      setSaveState('err', '保存失败：' + e.message);
+      toast('保存失败：' + e.message, 2600);
+    }).then(function () {
+      S.saveBusy = false;
+      if (S.saveDirty) { S.saveDirty = false; setTimeout(doSave, 120); }
+    });
+  }
+
+  function loadCfg() {
+    return callJSON('/api/config').then(function (j) {
+      S.cfg = j.config || {};
+      S.def = j.defaults || {};
+      if (!j.exists) {
+        $('#cfgWarn').innerHTML = noteHTML('配置文件不存在，模块可能未正确安装', true);
+      }
+      // 用默认值补齐缺项
+      Object.keys(S.def).forEach(function (k) { if (S.cfg[k] === undefined) S.cfg[k] = S.def[k]; });
+      syncCfgUI();
+      loadBypass();
+    });
+  }
+
+  function noteHTML(txt, warn) {
+    return '<div class="note' + (warn ? ' warn' : '') + '">' +
+      '<svg class="ic"><use href="#i-' + (warn ? 'warn' : 'info') + '"/></svg><span>' + txt + '</span></div>';
+  }
+
+  function applyFeature() {
+    var f = (S.info && S.info.feature) || null;
+    if (!f) return;
+    var warns = [];
+    if (!f.current) warns.push('未找到可写的充电电流节点，<b>最大充电电流</b>与<b>高温电流</b>不会生效。');
+    if (!f.suspend) warns.push('未找到停充节点，<b>电量控制</b>与<b>旁路供电</b>可能无法生效。');
+    if (!f.step) warns.push('未找到阶梯充电节点，<b>阶梯式充电</b>设置不会生效。');
+    if (!f.temp) warns.push('未读取到电池温度，<b>温度控制</b>可能无法生效。');
+    if (warns.length) $('#cfgWarn').innerHTML = warns.map(function (t) { return noteHTML(t, true); }).join('');
+
+    var dis = function (k, on) {
+      var inp = document.getElementById('in_' + k);
+      var wrap = document.getElementById('wrap_' + k);
+      if (inp) inp.disabled = !!on;
+      if (wrap) wrap.classList.toggle('dis', !!on);
+    };
+    dis('CURRENT_MAX', !f.current);
+    dis('HIGHEST_TEMP_CURRENT', !f.current);
+    dis('CHARGE_STOP', !f.suspend);
+    dis('CHARGE_START', !f.suspend);
+    dis('STEP_CHARGING_DISABLED_THRESHOLD', !f.step);
+    if (!f.temp) dis('TEMP_MAX', true), dis('RECHARGE_TEMP', true);
+    var byp = $('.sw[data-key="BYPASS_CHARGE"]');
+    if (byp) byp.disabled = false;
+  }
+
+  /* ---- 开关 ---- */
+  function bindSwitches() {
+    $$('.sw[data-key]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.disabled) return;
+        var k = btn.dataset.key;
+        var cur = btn.getAttribute('aria-checked') === 'true';
+        var next = cur ? 0 : 1;
+        btn.setAttribute('aria-checked', next ? 'true' : 'false');
+        btn.disabled = true;
+        postForm('/api/config', k + '=' + next).then(function () {
+          S.cfg[k] = String(next);
+          toast((next ? '已开启 · ' : '已关闭 · ') + (SW_LABEL[k] || k));
+          setSaveState('ok', '已保存 · ' + nowStr());
+        }).catch(function (e) {
+          btn.setAttribute('aria-checked', cur ? 'true' : 'false');
+          toast('操作失败：' + e.message, 2600);
+        }).then(function () { btn.disabled = false; });
+      });
+    });
+  }
+
+  /* ---- 旁路白名单 ---- */
+  function loadBypass() {
+    return callJSON('/api/bypass').then(function (j) {
+      var ta = $('#bypassTa');
+      if (ta) ta.value = (j.apps || []).join('\n');
+    }).catch(function () { });
+  }
+  function saveBypass() {
+    var ta = $('#bypassTa');
+    if (!ta) return Promise.resolve();
+    return postForm('/api/bypass', 'text=' + encodeURIComponent(ta.value)).then(function (j) {
+      if (j && j.ignored && j.ignored.length) toast('已忽略：' + j.ignored.join('、'), 2600);
+      else toast('白名单已保存');
+      if (j && j.apps) ta.value = j.apps.join('\n');
+    }).catch(function (e) { toast('保存失败：' + e.message, 2600); });
+  }
+
+  /* ---- 配置管理 ---- */
+  function resetCfg(src) {
+    var q = src === 'default' ? '?src=default' : '?src=bak';
+    var txt = src === 'default' ? '恢复为模块出厂默认配置？当前配置会备份。' : '回滚到上一次保存前的配置？';
+    if (!window.confirm(txt)) return;
+    postForm('/api/config/reset' + q, '').then(function (j) {
+      toast(j.msg || '操作成功');
+      return loadCfg();
+    }).then(function () { return refreshStatus(); })
+      .catch(function (e) { toast('操作失败：' + e.message, 2600); });
+  }
+
+  /* ============ 9. 信息 / 诊断 ============ */
+  function loadInfo() {
+    return callJSON('/api/info').then(function (j) {
+      S.info = j;
+      var d = j.device || {}, m = j.module || {}, e = j.env || {};
+      $('#devModel').textContent = (d.model || '--') + (d.device ? ' · ' + d.device : '');
+      $('#devAndroid').textContent = 'Android ' + (d.android || '?');
+      $('#devVer').textContent = m.version || '--';
+      $('#devPort').textContent = e.port || '8080';
+      $('#brandSub').textContent = 'v' + (m.version || '?') + ' · 端口 ' + (e.port || '8080');
+      var f = j.feature || {};
+      var rows = [
+        ['模块目录', m.dir || '--'],
+        ['Busybox', e.busybox || '未找到'],
+        ['电流节点', e.cur_file || '未找到'],
+        ['停充节点', e.suspend_file || '未找到'],
+        ['内核', d.kernel || '--'],
+        ['状态/电量', (f.status ? '✓' : '✗') + ' / ' + (f.capacity ? '✓' : '✗')],
+        ['温度/电流', (f.temp ? '✓' : '✗') + ' / ' + (f.current ? '✓' : '✗')],
+        ['阶梯/停充', (f.step ? '✓' : '✗') + ' / ' + (f.suspend ? '✓' : '✗')],
+        ['旁路文件', f.bypass ? '✓ 已存在' : '✗ 不存在']
+      ];
+      $('#diagBody').innerHTML = rows.map(function (r) {
+        return '<div class="kv"><div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div></div>';
+      }).join('');
+      applyFeature();
+    });
+  }
+
+  /* ============ 10. 日志 ============ */
+  function loadLog() {
+    var box = $('#logBox');
+    var atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 48;
+    return callText('/api/log?n=' + S.logN + '&src=' + S.logSrc).then(function (t) {
+      box.textContent = t || '（空）';
+      if (atBottom) box.scrollTop = box.scrollHeight;
+    }).catch(function (e) {
+      box.textContent = '读取日志失败：' + e.message;
+    });
+  }
+
+  function copyText(t) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(t);
+    }
+    return new Promise(function (resolve, reject) {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = t;
+        ta.style.cssText = 'position:fixed;left:-999px;top:0';
+        document.body.appendChild(ta);
+        ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok ? resolve() : reject(new Error('不支持复制'));
+      } catch (e) { reject(e); }
+    });
+  }
+
+  /* ============ 11. Tab ============ */
+  var TABS = ['home', 'cfg', 'log'];
+  function setTab(t) {
+    if (TABS.indexOf(t) < 0) t = 'home';
+    S.tab = t;
+    $$('.seg button').forEach(function (b) { b.classList.toggle('on', b.dataset.tab === t); });
+    var i = TABS.indexOf(t);
+    var ind = $('#segInd');
+    if (ind) ind.style.transform = 'translateX(' + (i * 100) + '%)';
+    $$('.page').forEach(function (p) { p.classList.toggle('on', p.id === 'pg-' + t); });
+    window.scrollTo(0, 0);
+    if (t === 'home') scheduleChart();
+    if (t === 'log') loadLog();
+  }
+
+  /* ============ 12. 事件绑定 ============ */
+  function bindEvents() {
+    $('#btnTheme').addEventListener('click', function () {
+      var next = S.themePref === 'auto' ? 'light' : (S.themePref === 'light' ? 'dark' : 'auto');
+      setTheme(next);
+      toast('主题：' + ({ auto: '跟随系统', light: '浅色', dark: '深色' })[next]);
+    });
+
+    $('#btnRefresh').addEventListener('click', function () {
+      var b = this;
+      b.classList.add('spin');
+      Promise.all([refreshStatus(), loadInfo().catch(function () { }), S.tab === 'log' ? loadLog() : Promise.resolve()])
+        .then(function () { toast('已刷新'); })
+        .catch(function (e) { toast('刷新失败：' + e.message, 2400); })
+        .then(function () { b.classList.remove('spin'); });
+    });
+
+    $$('.seg button').forEach(function (b) {
+      b.addEventListener('click', function () { setTab(b.dataset.tab); });
+    });
+
+    $('#btnBypassSave').addEventListener('click', saveBypass);
+    $('#btnRollback').addEventListener('click', function () { resetCfg('bak'); });
+    $('#btnDefault').addEventListener('click', function () { resetCfg('default'); });
+
+    $$('#logSrc .chip').forEach(function (c) {
+      c.addEventListener('click', function () {
+        S.logSrc = c.dataset.src;
+        $$('#logSrc .chip').forEach(function (x) { x.classList.toggle('on', x === c); });
+        loadLog();
+      });
+    });
+    $$('#logLines .chip').forEach(function (c) {
+      c.addEventListener('click', function () {
+        S.logN = Number(c.dataset.n) || 200;
+        $$('#logLines .chip').forEach(function (x) { x.classList.toggle('on', x === c); });
+        loadLog();
+      });
+    });
+    $('#btnAuto').addEventListener('click', function () {
+      S.logAuto = !S.logAuto;
+      this.classList.toggle('on', S.logAuto);
+      toast(S.logAuto ? '日志自动刷新已开启' : '日志自动刷新已关闭');
+      if (S.logAuto) loadLog();
+    });
+    $('#btnLogRefresh').addEventListener('click', function () {
+      this.classList.add('spin');
+      var b = this;
+      loadLog().then(function () { b.classList.remove('spin'); });
+    });
+    $('#btnLogCopy').addEventListener('click', function () {
+      copyText($('#logBox').textContent || '').then(function () { toast('日志已复制'); })
+        .catch(function (e) { toast('复制失败：' + e.message); });
+    });
+    $('#btnLogClear').addEventListener('click', function () {
+      if (!window.confirm('确定清空本次启动的日志？')) return;
+      postForm('/api/log/clear', '').then(function (j) {
+        toast(j.msg || '已清空');
+        return loadLog();
+      }).catch(function (e) { toast('清空失败：' + e.message, 2600); });
+    });
+
+    window.addEventListener('resize', function () {
+      clearTimeout(window._tcRs);
+      window._tcRs = setTimeout(drawChart, 160);
+    });
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) { tick(); if (S.tab === 'log' && S.logAuto) loadLog(); }
+    });
+
+    // 滚动态 appbar 描边
+    window.addEventListener('scroll', function () {
+      var y = window.scrollY || document.documentElement.scrollTop || 0;
+      $('#appbar').classList.toggle('solid', y > 6);
+    }, { passive: true });
+
+    // 日志自动刷新
+    setInterval(function () {
+      if (S.logAuto && S.tab === 'log' && !document.hidden) loadLog();
+    }, 3000);
+  }
+
+  /* ============ 13. 启动 ============ */
+  function refreshStatus() {
+    return callJSON('/api/status').then(function (st) { S.status = st; renderStatus(); });
+  }
+
+  function startPoll() {
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(tick, 1800);
+  }
+
+  function boot() {
+    detect().then(function (base) {
+      if (base) {
+        S.mode = 'direct';
+        S.base = base;
+        return true;
+      }
+      // 退回 iframe 桥接
+      S.mode = 'bridge';
+      S.base = '';
+      return bridgeCall('/api/ping', null).then(function (t) {
+        var j = null;
+        try { j = JSON.parse(t); } catch (e) { }
+        return !!(j && j.ok);
+      }).catch(function () { return false; });
+    }).then(function (ok) {
+      if (!ok) {
+        bootFail('连接不到模块服务', '请确认 turbo-charge 模块已安装、WebUI 已在 8080 端口启动；也可以直接在浏览器打开 http://127.0.0.1:8080/');
+        return;
+      }
+      S.ready = true;
+      return Promise.all([loadInfo(), loadCfg(), refreshStatus()]).then(function () {
+        hideBoot();
+        startPoll();
+        setTab('home');
+      });
+    }).catch(function (e) {
+      bootFail('初始化失败', String(e && e.message || e));
+    });
+  }
+
+  function init() {
+    buildFields();
+    bindSwitches();
+    bindEvents();
+    boot();
+  }
+
+  // 供 CDP / 调试使用
+  window.__tc.setTab = setTab;
+  window.__tc.refresh = refreshStatus;
+  window.__tc.reload = function () { return Promise.all([loadInfo(), loadCfg(), refreshStatus(), loadLog()]); };
+  window.__tc.save = doSave;
+  window.__tc.setTheme = setTheme;
+  window.__tc.loadLog = loadLog;
+  window.__tc.drawChart = drawChart;
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

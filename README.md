@@ -149,6 +149,14 @@ http://127.0.0.1:8080
 4. 模块更名为 **充电调控**，id 为 `charge-control`，版本号从 **v1.0** 重新计数。
 5. 原版核心功能与配置格式保持不变。
 
+## 在线更新
+
+`module.prop` 的 `updateJson` 指向本仓库自建的 [`update.json`](https://github.com/Yxlan-yu/charge-control/blob/main/update.json)：
+
+- KernelSU / KernelSU-Next / Magisk 管理器打开模块详情时会读它，发现更大的 `versionCode` 就提示更新，并直接下载 Release 里的 zip。
+- 本次发布是 `version=1.0` / `versionCode=1`，对应 [Release v1.0](https://github.com/Yxlan-yu/charge-control/releases/tag/v1.0)。
+- 该地址走 `raw.githubusercontent.com`：**如果你的网络访问不了它，管理器内的更新检查会失败**（不影响模块本体运行），请直接到 [Releases](https://github.com/Yxlan-yu/charge-control/releases) 下载 zip 手动刷入。
+
 ## 仓库结构
 
 ```

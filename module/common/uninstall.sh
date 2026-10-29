@@ -1,5 +1,6 @@
 #!/system/bin/sh
-# 卸载清理：先停掉 WebUI 的 nc 进程并撤掉 iptables 兜底规则，再删配置目录
+# 卸载清理：清掉 v1.0 遗留的 nc 进程与 iptables 兜底规则，再删配置目录
+# （v1.1 起模块自身不监听任何端口，这里只为覆盖从旧版升级过来的场景）
 IPT_FILE=/data/adb/turbo-charge/webui.iptables
 if [ -f "$IPT_FILE" ]; then
     IPT=$(cat "$IPT_FILE" 2>/dev/null)

@@ -1,8 +1,12 @@
 #!/system/bin/sh
 # =========================================================
-#  充电调控 WebUI · HTTP API  (v1.0)
+#  充电调控 WebUI · HTTP API  (v1.1)
 #  用法: http_api.sh <MODDIR> <PORT>
-#  由 busybox nc -lk -e 为每个连接调用一次
+#  两种调用方式（路由与校验逻辑完全相同）:
+#    ① 零端口（v1.1 起默认）: 由 api_cli.sh 从 stdin 喂入一条 HTTP 请求，
+#       PORT 固定传 0（/api/ping 的 port 字段即为 0）
+#    ② 回环端口（v1.0 旧方式，仍可直接手跑）: 由 busybox nc -lk -e 为每个
+#       连接调用一次，PORT 为实际监听端口
 #
 #  路由:
 #    GET  /                     面板 (webroot/index.html)

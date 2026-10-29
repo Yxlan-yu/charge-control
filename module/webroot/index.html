@@ -378,7 +378,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
       <div class="row"><div class="rx"><div class="rt">机型</div></div><div class="rv" id="devModel">--</div></div>
       <div class="row"><div class="rx"><div class="rt">系统版本</div></div><div class="rv" id="devAndroid">--</div></div>
       <div class="row"><div class="rx"><div class="rt">模块版本</div></div><div class="rv" id="devVer">--</div></div>
-      <div class="row"><div class="rx"><div class="rt">服务端口</div></div><div class="rv" id="devPort">--</div></div>
+      <div class="row"><div class="rx"><div class="rt">连接方式</div></div><div class="rv" id="devPort">--</div></div>
       <div class="row"><div class="rx"><div class="rt">运行时长</div></div><div class="rv" id="devUp">--</div></div>
     </div>
 
@@ -590,6 +590,132 @@ details.card>summary .chev .ic{width:15px;height:15px}
     });
   }
 
+  /* ============ 3a. ksu.exec 直连（零端口，首选通道） ============
+     模块管理器（KernelSU / SukiSU / KernelSU-Next）会把 window.ksu 注入本页面，
+     前端把请求交给管理器执行 api_cli.sh 即可。模块不监听任何端口、不建任何
+     socket，其它 App 根本没有可连的地址，也没有中间人可插入。
+     每条请求的代价是一次 shell fork（实测 < 200 ms）。 */
+  var KSU_API_LIST = [
+    '/data/adb/modules/charge-control/api_cli.sh',
+    '/data/adb/modules_update/charge-control/api_cli.sh'
+  ];
+  var KSU_API = KSU_API_LIST[0];
+  var ksuSeq = 0;
+
+  function ksuObj() {
+    if (window.ksu && typeof window.ksu.exec === 'function') return window.ksu;
+    if (window.ksud && typeof window.ksud.exec === 'function') return window.ksud;
+    return null;
+  }
+  function ksuReady() { return !!ksuObj(); }
+
+  /* 单引号安全转义：' -> '\'' */
+  function shq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
+
+  /* UTF-8 -> base64（正文只有 ASCII，但按钮文案等可能带中文，稳妥处理） */
+  function b64utf8(str) {
+    var s = String(str == null ? '' : str), bin = '';
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      if (c < 0x80) bin += String.fromCharCode(c);
+      else if (c < 0x800) bin += String.fromCharCode(0xC0 | (c >> 6), 0x80 | (c & 63));
+      else bin += String.fromCharCode(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    try { return btoa(bin); } catch (e) { return ''; }
+  }
+
+  /* 三形态兼容：
+     ① exec(cmd, optionsJSON, callbackName) + window[cb](errno, stdout, stderr)  ← KSU 3.x 金标准
+     ② exec(cmd, options) 返回 Promise<{errno,stdout,stderr}> 或 Promise<string>
+     ③ exec(cmd, fn) 回调式
+     20 秒必 reject，绝不永挂。 */
+  function ksuExec(cmd, ms) {
+    var k = ksuObj();
+    if (!k) return Promise.reject(new Error('当前环境没有 ksu.exec'));
+    return new Promise(function (resolve, reject) {
+      var done = false, timer = null, cbName = '__tcKsu' + (++ksuSeq);
+      function fin(errno, stdout, stderr) {
+        if (done) return;
+        done = true;
+        if (timer) clearTimeout(timer);
+        try { delete window[cbName]; } catch (e) { window[cbName] = undefined; }
+        if (errno === 0 || errno === '0' || errno === undefined || errno === null) {
+          resolve(String(stdout == null ? '' : stdout));
+        } else {
+          reject(new Error(String(stderr || ('ksu.exec 退出码 ' + errno))));
+        }
+      }
+      timer = setTimeout(function () {
+        if (done) return;
+        done = true;
+        try { delete window[cbName]; } catch (e) { }
+        reject(new Error('ksu.exec 超时'));
+      }, ms || 20000);
+      window[cbName] = function (errno, stdout, stderr) { fin(errno, stdout, stderr); };
+      var ret;
+      try {
+        ret = k.exec(cmd, JSON.stringify({ cwd: '/' }), cbName);
+      } catch (e1) {
+        try {
+          ret = k.exec(cmd, function (errno, stdout, stderr) { fin(errno, stdout, stderr); });
+        } catch (e2) {
+          fin(1, '', String(e2 && e2.message || e2));
+          return;
+        }
+      }
+      if (ret && typeof ret.then === 'function') {
+        ret.then(function (v) {
+          if (v && typeof v === 'object') fin(v.errno, v.stdout, v.stderr);
+          else fin(0, v, '');
+        }, function (e) {
+          if (!done) fin(1, '', String(e && e.message || e));
+        });
+      }
+    });
+  }
+
+  /* 把 "HTTP/1.1 200 OK\r\n头\r\n\r\n正文" 拆成 {status, ok, text} */
+  function httpOf(raw) {
+    var s = String(raw == null ? '' : raw);
+    var m = /^HTTP\/1\.[01]\s+(\d{3})/.exec(s);
+    var idx = s.indexOf('\r\n\r\n'), sep = 4;
+    if (idx < 0) { idx = s.indexOf('\n\n'); sep = 2; }
+    var body = idx < 0 ? s : s.slice(idx + sep);
+    var status = m ? Number(m[1]) : 0;
+    return { status: status, ok: status >= 200 && status < 300, text: body };
+  }
+
+  function ksuCall(path, opt) {
+    var method = (opt && opt.method) || 'GET';
+    var body = (opt && opt.body) || '';
+    var cmd = '/system/bin/sh ' + shq(KSU_API) + ' ' + shq(path) + ' ' + shq(method) +
+      (body ? ' ' + shq(b64utf8(body)) : '');
+    return ksuExec(cmd, 20000).then(function (raw) {
+      var r = httpOf(raw);
+      if (r.ok) return r.text;
+      var msg = 'HTTP ' + (r.status || '?');
+      try { var j = JSON.parse(r.text); if (j && j.error) msg = j.error; } catch (e) { }
+      var err = new Error(msg);
+      err.body = r.text;
+      throw err;
+    });
+  }
+
+  function ksuPing() {
+    if (!ksuReady()) return Promise.resolve(null);
+    var i = 0;
+    function next() {
+      if (i >= KSU_API_LIST.length) return Promise.resolve(null);
+      KSU_API = KSU_API_LIST[i++];
+      return ksuCall('/api/ping', null).then(function (t) {
+        var j = null;
+        try { j = JSON.parse(t); } catch (e) { }
+        return (j && j.ok) ? j : next();
+      }).catch(next);
+    }
+    return next();
+  }
+
   var bridgeFrame = null, bridgeSeq = 0, bridgePending = {};
 
   function onBridgeMsg(ev) {
@@ -636,18 +762,21 @@ details.card>summary .chev .ic{width:15px;height:15px}
     });
   }
 
-  function callText(path, opt) {
-    if (S.mode === 'bridge') return bridgeCall(path, opt);
-    return timeoutFetch(S.base + path, opt, 9000).then(function (r) {
-      return r.text().then(function (t) {
-        if (r.ok) return t;
-        var msg = 'HTTP ' + r.status;
-        try { var j = JSON.parse(t); if (j && j.error) msg = j.error; } catch (e) { }
-        var err = new Error(msg);
-        err.body = t;
-        throw err;
-      });
+  function resText(r) {
+    return r.text().then(function (t) {
+      if (r.ok) return t;
+      var msg = 'HTTP ' + r.status;
+      try { var j = JSON.parse(t); if (j && j.error) msg = j.error; } catch (e) { }
+      var err = new Error(msg);
+      err.body = t;
+      throw err;
     });
+  }
+
+  function callText(path, opt) {
+    if (S.mode === 'ksu') return ksuCall(path, opt);
+    if (S.mode === 'bridge') return bridgeCall(path, opt);
+    return timeoutFetch(S.base + path, opt, 9000).then(resText);
   }
   function callJSON(path, opt) {
     return callText(path, opt).then(function (t) {
@@ -741,7 +870,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
 
     var up = Number(st.uptime) || 0;
     $('#devUp').textContent = up ? upText(up) : '--';
-    $('#devPort').textContent = st.port || '--';
+    $('#devPort').textContent = linkText(st);
     if (st.module && st.module.version) $('#devVer').textContent = st.module.version;
 
     // 走势
@@ -1080,6 +1209,12 @@ details.card>summary .chev .ic{width:15px;height:15px}
   }
 
   /* ============ 9. 信息 / 诊断 ============ */
+  function linkText(e) {
+    if (S.mode === 'ksu') return 'ksu.exec 直连 · 无端口';
+    if (S.mode === 'bridge') return 'iframe 桥接';
+    return '回环 HTTP · ' + ((e && e.port) || '--');
+  }
+
   function loadInfo() {
     return callJSON('/api/info').then(function (j) {
       S.info = j;
@@ -1087,8 +1222,9 @@ details.card>summary .chev .ic{width:15px;height:15px}
       $('#devModel').textContent = (d.model || '--') + (d.device ? ' · ' + d.device : '');
       $('#devAndroid').textContent = 'Android ' + (d.android || '?');
       $('#devVer').textContent = m.version || '--';
-      $('#devPort').textContent = e.port || '8080';
-      $('#brandSub').textContent = 'v' + (m.version || '?') + ' · 端口 ' + (e.port || '8080');
+      $('#devPort').textContent = linkText(e);
+      $('#brandSub').textContent = 'v' + (m.version || '?') + ' · ' +
+        (S.mode === 'ksu' ? '直连' : S.mode === 'bridge' ? '桥接' : ('端口 ' + (e.port || '--')));
       var f = j.feature || {};
       var rows = [
         ['模块目录', m.dir || '--'],
@@ -1246,27 +1382,42 @@ details.card>summary .chev .ic{width:15px;height:15px}
   }
 
   function boot() {
-    detect().then(function (base) {
-      if (base) {
-        S.mode = 'direct';
-        S.base = base;
+    // ① 首选 ksu.exec 直连（零端口）② 回环端口（v1.0 兼容）③ iframe 桥接（浏览器调试）
+    ksuPing().then(function (p) {
+      if (p) {
+        S.mode = 'ksu';
+        S.base = '';
+        S.ping = p;
         return true;
       }
-      // 退回 iframe 桥接
-      S.mode = 'bridge';
-      S.base = '';
-      return bridgeCall('/api/ping', null).then(function (t) {
-        var j = null;
-        try { j = JSON.parse(t); } catch (e) { }
-        return !!(j && j.ok);
-      }).catch(function () { return false; });
+      return detect().then(function (base) {
+        if (base) {
+          S.mode = 'direct';
+          S.base = base;
+          return true;
+        }
+        // 管理器环境下不再尝试 iframe 桥接（那会白等 12 秒）
+        if (ksuReady()) return false;
+        // 退回 iframe 桥接
+        S.mode = 'bridge';
+        S.base = '';
+        return bridgeCall('/api/ping', null).then(function (t) {
+          var j = null;
+          try { j = JSON.parse(t); } catch (e) { }
+          return !!(j && j.ok);
+        }).catch(function () { return false; });
+      });
     }).then(function (ok) {
       if (!ok) {
-        bootFail('连接不到模块服务', '请确认 charge-control 模块已安装、WebUI 已在 8080 端口启动；也可以直接在浏览器打开 http://127.0.0.1:8080/');
+        bootFail('连接不到模块服务',
+          (ksuReady()
+            ? '本页面没有拿到模块管理器的 exec 权限。'
+            : '当前环境没有模块管理器提供的 exec 接口。') +
+          '请从 KernelSU / SukiSU / KernelSU-Next 管理器的「模块 → 充电调控 → 打开」进入本面板（v1.1 起模块不再监听任何端口，浏览器直连 127.0.0.1 已不可用）。');
         return;
       }
-      S.ready = true;
       return Promise.all([loadInfo(), loadCfg(), refreshStatus()]).then(function () {
+        S.ready = true;   // 只有数据全部到手才算就绪（外部探针依赖这个语义）
         hideBoot();
         startPoll();
         setTab('home');

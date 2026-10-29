@@ -1,3 +1,23 @@
+# v1.1（零监听端口）
+
+### Changelog
+
+1.安全：面板改为完全不走网络。模块不再监听任何端口、不再创建 socket，删除 nc 监听、iptables 规则、看门狗与 webui.log；外部没有任何端口可连、可扫、可爆破
+
+2.面板数据改经模块管理器（KernelSU / SukiSU / KernelSU-Next）注入的 ksu.exec 执行 api_cli.sh 取得；请求不经过网络栈，本机其它 App 无法再像 v1.0 那样连 127.0.0.1:8080 改配置
+
+3.新增 api_cli.sh：把「路径 + 方法 + base64 请求体」拼成一次内部请求喂给 http_api.sh，路由、键白名单、数值校验、原子写入逻辑与 v1.0 逐字节一致
+
+4.面板顶栏副标题新增连接方式提示（直连 · 无端口 / 桥接 / 回环 HTTP · 端口 N），「服务端口」一行改为「连接方式」
+
+5.前端容错：ksu.exec 20 秒无响应明确报错不再无限转圈；已判定在管理器内时不再白等 iframe 桥接；/modules/ 路径不存在时自动回退 /modules_update/
+
+6.⚠️ 取舍：面板只能在模块管理器内打开，浏览器访问手机 IP 或 127.0.0.1 的 8080 一律失败；Magisk 管理器没有 WebUI 入口与 ksu.exec，Magisk 用户看不到面板，改参数请直接编辑 /data/adb/turbo-charge/option.txt
+
+7.从 v1.0 升级可直接覆盖安装：service.sh 开机时删除旧的 iptables 规则、按 cmdline 校验后杀掉残留 nc 进程，并清理 webui.iptables / webui.pid
+
+8.移除 adb forward 调试方式（已无端口可转发）；文档补充零端口原理、取舍与常见问题
+
 # v1.0（更名「充电调控」）
 
 ### Changelog

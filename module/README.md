@@ -4,7 +4,7 @@
 
 > 原版模块功能：删除温控，关闭阶梯式充电，持续修改电池温度及充电电流，尽可能让手机满血快充。
 
-## 界面预览（v1.0）
+## 界面预览（v1.1）
 
 控制面板按 **Miuix（HyperOS）** 风格重做：浅色 `#F2F3F5` 底 + 白色 20px 圆角卡片 + `#3482FF` 强调色，深色为纯黑底 + `#191A1C` 卡片 + `#4A8DFF` 强调色；顶部分段控件切换 **概览 / 参数 / 日志** 三个页面，主题支持 **跟随系统 / 浅色 / 深色**。
 
@@ -31,50 +31,53 @@
 - **本次 / 上次** 两份日志切换（`log.txt` / `log.txt.old`，每次开机自动把旧日志改名保留一份）。
 - 行数可选 **100 / 200 / 500 / 1000**，支持 **自动刷新**、**一键复制**、**清空当前日志**。
 
-### 安全（v1.0 起）
+## 零监听端口（v1.1 核心变更）
 
-- **只监听本机回环地址 `127.0.0.1`**，不再监听 `0.0.0.0`，局域网内其它设备（含公共 WiFi 下的陌生人）根本连不上 8080 端口。
-- **iptables 兜底**：启动时无条件追加一条 `INPUT -p tcp --dport 8080 ! -s 127.0.0.1 -j DROP` 规则，即使某些机型的 busybox `nc` 不支持 `-s` 绑定地址、退回全局监听，外部来源的数据包也会在内核层被丢弃。
-- **卸载自动撤销**：`uninstall.sh` 会按记录逐条删除上面那条规则，不会在系统里留下残留防火墙条目。
-- **无鉴权但也不再需要鉴权**：端口已不对外，请求只可能来自本机 App（管理器 WebView）或你 `adb forward` 过来的电脑。
+v1.0 的做法是「本机回环 `127.0.0.1` + iptables 拦截外部来源」，能挡住局域网，但**挡不住本机其它 App**：本机 App 连 `127.0.0.1:8080` 时源地址就是 `127.0.0.1`，那条 `! -s 127.0.0.1 -j DROP` 规则天然匹配不上，而面板接口没有鉴权 —— 也就是说任何有网络权限的本机应用都能改你的充电配置、清你的日志。
 
-### 稳定性
+v1.1 直接把端口拿掉了：
 
-- **看门狗**：`service.sh` 每 30 秒巡检 WebUI 进程，进程掉了自动拉起；并校验 `/proc/$PID/cmdline` 防止 PID 复用误判。
-- **启动校验**：`nc -s` 启动后 1 秒做存活检查，不支持该参数就自动降级到全局监听 + iptables 拦截，不会出现「面板打不开」。
-- **日志轮转**：`webui.log` 超过 256KB 时只保留末尾 128KB，不会无限增长。
-- **旧地址兼容**：`/panel.html` 与 `/webroot/*` 一律返回新的单页面板，老书签不会 404。
+- **模块不再监听任何端口、不创建任何 socket**，`nc` / `iptables` / 看门狗 / `webui.log` 全部移除。
+- 面板通过模块管理器（KernelSU / SukiSU / KernelSU-Next）注入的 `ksu.exec`，在 root shell 里执行 `api_cli.sh` 拿数据；请求根本不经过网络栈，**外部没有任何端口可连、可扫、可爆破**。
+- `api_cli.sh` 只做一件事：把「路径 + 方法 + base64 请求体」拼成一次内部请求喂给 `http_api.sh`。路由、白名单、数值校验、原子写入这些逻辑与 v1.0 **逐字节一致**，只是入口从 socket 换成了命令行。
+- 顺带的好处：不再出现「8080 被别的软件占用导致面板打不开」，也不再需要 `adb forward`。
+
+### 取舍（务必知道）
+
+- **只能在管理器里打开面板**。面板不再是网页服务，浏览器直接访问 `http://手机IP:8080` 或 `http://127.0.0.1:8080` 都会失败（这是设计如此，不是 bug）。
+- **Magisk 用户看不到面板**：Magisk 管理器没有 WebUI 入口，也没有 `ksu.exec`。Magisk 下模块本体（充电控制）照常工作，改参数请直接编辑 `/data/adb/turbo-charge/option.txt`。
+- **每次请求要在 root shell 里 fork 一次**，刷新耗时比本地 HTTP 略高（实测一屏数据 3 个请求约 0.3–1 秒），换来的是零端口暴露。
+- 极老的 KernelSU 版本 `ksu.exec` 签名不一致时面板会提示连不上；本面板做了三种调用形态的回退（对象回调 / 字符串回调 / 布尔返回），并会在 `/modules/` 路径不存在时自动改走 `/modules_update/`。
+
+## 稳定性
+
+- **不再有常驻进程**：v1.0 的 `nc` 看门狗与日志轮转随端口一起删除，少一个会挂的东西。
+- **旧版遗留自动清理**：升级到 v1.1 后，`service.sh` 会删掉 v1.0 留下的 iptables 规则、按 `/proc/$PID/cmdline` 校验后杀掉残留的 `nc` 进程，并删除 `webui.iptables` / `webui.pid`。
 - **单文件面板**：整个前端只有一个 `webroot/index.html`（无外链、无 CDN），离线可用。
+- **面板自身容错**：`ksu.exec` 20 秒无响应会明确报错而不是无限转圈；管理器环境判定成立时不会再去白等 iframe 桥接。
 
 ## 打开方式
 
-安装模块后，推荐从管理器进入：
+安装模块后：
 
 ```
-KernelSU / KernelSU-Next / Magisk 管理器 → 本模块 → 打开（WebUI）
+KernelSU / SukiSU / KernelSU-Next 管理器 → 本模块 → 打开（WebUI）
 ```
 
-管理器里的 WebUI 由本机 WebView 发起请求，走 `127.0.0.1`，不受「只监听本机」影响。
+面板顶栏副标题会显示当前连接方式（`直连 · 无端口`），一眼能确认走的是 `ksu.exec`。
 
-电脑上调试请看这里 —— **不能再用手机 IP**，需要先把端口转发到本机：
-
-```bash
-adb forward tcp:8080 tcp:8080
-# 然后在电脑浏览器打开
-http://127.0.0.1:8080
-```
-
-> 用完可以 `adb forward --remove tcp:8080` 撤销转发。
+> 浏览器直接打开 `http://手机IP:8080`、`adb forward` 之类的老办法**在 v1.1 全部失效**。
 > 所有设备信息均在本机处理，不做任何上传。
 
 ## 安装方法
 
-- **KernelSU / KernelSU-Next / Magisk**：管理器内直接安装本 zip 即可。
+- **KernelSU / SukiSU / KernelSU-Next / Magisk**：管理器内直接安装本 zip 即可（Magisk 下无面板，见上文）。
 - **升级**：模块 id 为 `charge-control`，同 id 直接覆盖安装，原配置文件会自动读取合并，未识别的项回落默认值。
+- **从 v1.0 升级**：直接覆盖安装即可；安装完成后重启一次，`service.sh` 会在开机时清理旧的端口与防火墙残留。
 - **从旧版（`turbo-charge`）迁移**：模块已由 `turbo-charge-webui` 更名为 **充电调控**，模块 id 也从 `turbo-charge` 改成 `charge-control`。**管理器不认为这是同一个模块**，所以请先卸载旧模块再安装本模块。
-  - 安装脚本会主动清理 `/data/adb/modules/turbo-charge` 与 `/data/adb/modules_update/turbo-charge`，避免两份 `service.sh` 同时抢 8080 端口；
+  - 安装脚本会主动清理 `/data/adb/modules/turbo-charge` 与 `/data/adb/modules_update/turbo-charge`，避免两份 `service.sh` 同时运行；
   - 旧配置目录 `/data/adb/turbo-charge` **不会删**，安装时会原样读入，参数不用重新填。
-- **卸载**：在管理器里卸载模块，配置目录 `/data/adb/turbo-charge` 会一并清理，iptables 兜底规则也会撤销。
+- **卸载**：在管理器里卸载模块，配置目录 `/data/adb/turbo-charge` 会一并清理；v1.0 遗留的 iptables 规则也会被撤销。
 
 ## 配置说明
 
@@ -103,22 +106,24 @@ http://127.0.0.1:8080
 | 路径 | 说明 |
 |---|---|
 | `/data/adb/modules/charge-control/` | 模块目录（管理器安装位置） |
+| `/data/adb/modules/charge-control/api_cli.sh` | 面板的命令行入口（`ksu.exec` 调用它） |
+| `/data/adb/modules/charge-control/http_api.sh` | 路由与校验（v1.0 原样复用） |
 | `/data/adb/turbo-charge/option.txt` | 当前配置 |
 | `/data/adb/turbo-charge/option.txt.bak` | 上次保存前的备份（可回滚） |
 | `/data/adb/turbo-charge/option.txt.default` | 出厂默认配置（可恢复默认） |
 | `/data/adb/turbo-charge/bypass_charge.txt` | 伪旁路包名列表 |
 | `/data/adb/turbo-charge/log.txt` | 模块运行日志 |
 | `/data/adb/turbo-charge/log.txt.old` | 上一次开机的日志 |
-| `/data/adb/turbo-charge/webui.log` | WebUI 服务日志 |
-| `/data/adb/turbo-charge/webui.iptables` | 记录兜底规则所用的 iptables 路径（卸载时用它 `-D`） |
 
 > ⚠️ `/data/adb/turbo-charge` 这个目录名**不能改**：原版预编译二进制 `turbo-charge` 内部硬编码了该路径（`option.txt` / `bypass_charge.txt`），改名会导致核心直接读不到配置。项目更名只改了模块 id 与显示名，配置目录保持原样。
 
-## HTTP 接口（仅本机可访问）
+## 接口（仅管理器内可达）
+
+接口本身与 v1.0 完全相同，只是入口从 HTTP 端口换成了 `api_cli.sh <路径?查询> <方法> [base64 请求体]`：
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/ping` | 健康检查 |
+| GET | `/api/ping` | 健康检查（`port` 恒为 0，表示非端口模式） |
 | GET | `/api/info` | 模块 / 设备 / 功能可用性 |
 | GET | `/api/status` | 实时充电状态 + 生效策略 |
 | GET | `/api/config` | 配置项 + 默认值 |
@@ -129,13 +134,27 @@ http://127.0.0.1:8080
 | GET | `/api/log?n=200&src=cur\|old` | 读取日志（n 钳制 10–2000） |
 | POST | `/api/log/clear` | 清空当前日志 |
 
-> 接口无鉴权，因为端口已限制为本机回环 + iptables 拦截外部来源，局域网内其它设备无法访问。
+> 没有鉴权也不需要鉴权：没有端口，就没有「谁都能连」的入口。
+
+## 常见问题
+
+**Q：为什么浏览器打不开面板了？**
+A：v1.1 不再监听端口，浏览器没有 `ksu.exec` 权限，从根上连不进模块。请在管理器里打开。
+
+**Q：Magisk 下怎么改参数？**
+A：直接编辑 `/data/adb/turbo-charge/option.txt`（16 进制无关，纯 `KEY=VALUE` 文本），改完等下一轮循环（默认 1 秒）生效，或重启。
+
+**Q：副标题显示「桥接」或「端口 8787」是什么意思？**
+A：说明当前不在管理器里，页面退回了 iframe 桥接（本地调试用）或 v1.0 的回环端口。真机管理器内应显示 `直连 · 无端口`。
+
+**Q：升级后 8080 还被占用？**
+A：那是 v1.0 遗留的 `nc` 进程，重启一次由 `service.sh` 清理；也可以手动 `su -c 'kill -9 $(cat /data/adb/turbo-charge/webui.pid)'`。
 
 ## 与原版差异
 
 1. 内置 WebUI 控制面板（概览 / 参数 / 日志 / 回滚 / 恢复默认）。
-2. busybox 自动探测，兼容 KernelSU / KernelSU-Next / Magisk / 系统 busybox，无需额外安装。
-3. **WebUI 仅监听 `127.0.0.1`**，并用 iptables 兜底拦截所有非本机来源，卸载时自动撤销规则。
+2. busybox 自动探测，兼容 KernelSU / KernelSU-Next / SUKISU / Magisk / 系统 busybox，无需额外安装。
+3. **面板零监听端口**：经 `ksu.exec` 在 root shell 内直连 `api_cli.sh`，不开放任何端口、不创建 socket。
 4. 模块更名为 **充电调控**，id 为 `charge-control`，版本号从 **v1.0** 重新计数。
 5. 原版核心功能与配置格式保持不变。
 
@@ -144,7 +163,7 @@ http://127.0.0.1:8080
 `module.prop` 的 `updateJson` 指向本仓库自建的 [`update.json`](https://github.com/Yxlan-yu/charge-control/blob/main/update.json)：
 
 - KernelSU / KernelSU-Next / Magisk 管理器打开模块详情时会读它，发现更大的 `versionCode` 就提示更新，并直接下载 Release 里的 zip。
-- 本次发布是 `version=1.0` / `versionCode=1`，对应 [Release v1.0](https://github.com/Yxlan-yu/charge-control/releases/tag/v1.0)。
+- 本次发布是 `version=1.1` / `versionCode=2`，对应 [Release v1.1](https://github.com/Yxlan-yu/charge-control/releases/tag/v1.1)。
 - 该地址走 `raw.githubusercontent.com`：**如果你的网络访问不了它，管理器内的更新检查会失败**（不影响模块本体运行），请直接到 [Releases](https://github.com/Yxlan-yu/charge-control/releases) 下载 zip 手动刷入。
 
 ## 开源协议

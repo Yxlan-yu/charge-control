@@ -378,7 +378,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
       <div class="row"><div class="rx"><div class="rt">机型</div></div><div class="rv" id="devModel">--</div></div>
       <div class="row"><div class="rx"><div class="rt">系统版本</div></div><div class="rv" id="devAndroid">--</div></div>
       <div class="row"><div class="rx"><div class="rt">模块版本</div></div><div class="rv" id="devVer">--</div></div>
-      <div class="row"><div class="rx"><div class="rt">连接方式</div></div><div class="rv" id="devPort">--</div></div>
+      <div class="row" id="devPortRow"><div class="rx"><div class="rt">连接方式</div></div><div class="rv" id="devPort">--</div></div>
       <div class="row"><div class="rx"><div class="rt">运行时长</div></div><div class="rv" id="devUp">--</div></div>
     </div>
 
@@ -590,7 +590,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
     });
   }
 
-  /* ============ 3a. ksu.exec 直连（零端口，首选通道） ============
+  /* ============ 3a. ksu.exec 通道（零端口，首选） ============
      模块管理器（KernelSU / SukiSU / KernelSU-Next）会把 window.ksu 注入本页面，
      前端把请求交给管理器执行 api_cli.sh 即可。模块不监听任何端口、不建任何
      socket，其它 App 根本没有可连的地址，也没有中间人可插入。
@@ -870,7 +870,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
 
     var up = Number(st.uptime) || 0;
     $('#devUp').textContent = up ? upText(up) : '--';
-    $('#devPort').textContent = linkText(st);
+    applyTransport(st);
     if (st.module && st.module.version) $('#devVer').textContent = st.module.version;
 
     // 走势
@@ -1210,9 +1210,25 @@ details.card>summary .chev .ic{width:15px;height:15px}
 
   /* ============ 9. 信息 / 诊断 ============ */
   function linkText(e) {
-    if (S.mode === 'ksu') return 'ksu.exec 直连 · 无端口';
+    if (S.mode === 'ksu') return '--';
     if (S.mode === 'bridge') return 'iframe 桥接';
     return '回环 HTTP · ' + ((e && e.port) || '--');
+  }
+
+  /* ksu.exec（正常路径）不显示传输方式，只有降级模式才提示，便于排障 */
+  function applyTransport(e) {
+    var isKsu = (S.mode === 'ksu');
+    var row = $('#devPortRow');
+    if (row) row.style.display = isKsu ? 'none' : '';
+    var dp = $('#devPort');
+    if (dp && !isKsu) dp.textContent = linkText(e);
+  }
+
+  function brandSubText(ver, e) {
+    var v = 'v' + (ver || '?');
+    if (S.mode === 'ksu') return v;
+    if (S.mode === 'bridge') return v + ' · 桥接';
+    return v + ' · 端口 ' + ((e && e.port) || '--');
   }
 
   function loadInfo() {
@@ -1223,8 +1239,8 @@ details.card>summary .chev .ic{width:15px;height:15px}
       $('#devAndroid').textContent = 'Android ' + (d.android || '?');
       $('#devVer').textContent = m.version || '--';
       $('#devPort').textContent = linkText(e);
-      $('#brandSub').textContent = 'v' + (m.version || '?') + ' · ' +
-        (S.mode === 'ksu' ? '直连' : S.mode === 'bridge' ? '桥接' : ('端口 ' + (e.port || '--')));
+      $('#brandSub').textContent = brandSubText(m.version, e);
+      applyTransport(e);
       var f = j.feature || {};
       var rows = [
         ['模块目录', m.dir || '--'],
@@ -1382,7 +1398,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
   }
 
   function boot() {
-    // ① 首选 ksu.exec 直连（零端口）② 回环端口（v1.0 兼容）③ iframe 桥接（浏览器调试）
+    // ① 首选 ksu.exec 通道（零端口）② 回环端口（v1.0 兼容）③ iframe 桥接（浏览器调试）
     ksuPing().then(function (p) {
       if (p) {
         S.mode = 'ksu';
@@ -1413,7 +1429,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
           (ksuReady()
             ? '本页面没有拿到模块管理器的 exec 权限。'
             : '当前环境没有模块管理器提供的 exec 接口。') +
-          '请从 KernelSU / SukiSU / KernelSU-Next 管理器的「模块 → 充电调控 → 打开」进入本面板（v1.1 起模块不再监听任何端口，浏览器直连 127.0.0.1 已不可用）。');
+          '请从 KernelSU / SukiSU / KernelSU-Next 管理器的「模块 → 充电调控 → 打开」进入本面板（v1.1 起模块不再监听任何端口，浏览器直接打开 127.0.0.1 已不可用）。');
         return;
       }
       return Promise.all([loadInfo(), loadCfg(), refreshStatus()]).then(function () {

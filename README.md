@@ -76,7 +76,7 @@ v1.1 直接把端口拿掉了：
 KernelSU / SukiSU / KernelSU-Next 管理器 → 本模块 → 打开（WebUI）
 ```
 
-面板顶栏副标题会显示当前连接方式（`直连 · 无端口`），一眼能确认走的是 `ksu.exec`。
+面板顶栏副标题在管理器内只显示版本号（例如 `v1.1`），`设备信息 → 连接方式` 一行默认隐藏；只有在降级的 iframe 桥接 / 回环 HTTP 模式下才会显示传输方式，用于排障。
 
 > 浏览器直接打开 `http://手机IP:8080`、`adb forward` 之类的老办法**在 v1.1 全部失效**。
 > 所有设备信息均在本机处理，不做任何上传。
@@ -86,7 +86,7 @@ KernelSU / SukiSU / KernelSU-Next 管理器 → 本模块 → 打开（WebUI）
 - **KernelSU / SukiSU / KernelSU-Next / Magisk**：管理器内直接安装本 zip 即可（Magisk 下无面板，见上文）。
 - **升级**：模块 id 为 `charge-control`，同 id 直接覆盖安装，原配置文件会自动读取合并，未识别的项回落默认值。
 - **从 v1.0 升级**：直接覆盖安装即可；安装完成后重启一次，`service.sh` 会在开机时清理旧的端口与防火墙残留。
-- **从旧版（`turbo-charge`）迁移**：模块已由 `turbo-charge-webui` 更名为 **充电调控**，模块 id 也从 `turbo-charge` 改成 `charge-control`。**管理器不认为这是同一个模块**，所以请先卸载旧模块再安装本模块。
+- **从旧版（`turbo-charge`）迁移**：项目已由 `turbo-charge-webui` 更名为 **charge-control（充电调控）**，模块 id 也从 `turbo-charge` 改成 `charge-control`。**管理器不认为这是同一个模块**，所以请先卸载旧模块再安装本模块。
   - 安装脚本会主动清理 `/data/adb/modules/turbo-charge` 与 `/data/adb/modules_update/turbo-charge`，避免两份 `service.sh` 同时运行；
   - 旧配置目录 `/data/adb/turbo-charge` **不会删**，安装时会原样读入，参数不用重新填。
 - **卸载**：在管理器里卸载模块，配置目录 `/data/adb/turbo-charge` 会一并清理；v1.0 遗留的 iptables 规则也会被撤销。
@@ -157,7 +157,7 @@ A：v1.1 不再监听端口，浏览器没有 `ksu.exec` 权限，从根上连�
 A：直接编辑 `/data/adb/turbo-charge/option.txt`（16 进制无关，纯 `KEY=VALUE` 文本），改完等下一轮循环（默认 1 秒）生效，或重启。
 
 **Q：副标题显示「桥接」或「端口 8787」是什么意思？**
-A：说明当前不在管理器里，页面退回了 iframe 桥接（本地调试用）或 v1.0 的回环端口。真机管理器内应显示 `直连 · 无端口`。
+A：说明当前不在管理器里，页面退回了 iframe 桥接（本地调试用）或 v1.0 的回环端口——这两种降级模式才会显示传输方式。真机管理器内副标题只显示版本号，`设备信息` 里不会出现「连接方式」这一行。
 
 **Q：升级后 8080 还被占用？**
 A：那是 v1.0 遗留的 `nc` 进程，重启一次由 `service.sh` 清理；也可以手动 `su -c 'kill -9 $(cat /data/adb/turbo-charge/webui.pid)'`。

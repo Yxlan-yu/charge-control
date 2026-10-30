@@ -506,7 +506,8 @@ details.card>summary .chev .ic{width:15px;height:15px}
     logSrc: 'cur', logN: 200, logAuto: false,
     themePref: 'auto', theme: 'light',
     saveTimer: null, saveBusy: false, saveDirty: false,
-    failCount: 0, bypassTimer: null
+    failCount: 0, bypassTimer: null,
+    bypass: null, snapAt: 0
   };
   window.__tc = S;
 
@@ -716,6 +717,31 @@ details.card>summary .chev .ic{width:15px;height:15px}
     return next();
   }
 
+  /* 首屏快照：一次往返拿齐 info / status / config / bypass。
+     旧版模块没有 /api/snapshot（404），此时再用 /api/ping 探一下：
+     探得通 = 「旧模块 + 新前端」，返回 { snap: null } 让调用方逐条加载。 */
+  function ksuSnapshot() {
+    if (!ksuReady()) return Promise.resolve(null);
+    var i = 0;
+    function next() {
+      if (i >= KSU_API_LIST.length) return Promise.resolve(null);
+      KSU_API = KSU_API_LIST[i++];
+      return ksuCall('/api/snapshot', null).then(function (t) {
+        var j = null;
+        try { j = JSON.parse(t); } catch (e) { }
+        if (j && j.ok && j.info) return { snap: j };
+        return next();
+      }).catch(function () {
+        return ksuCall('/api/ping', null).then(function (t) {
+          var j = null;
+          try { j = JSON.parse(t); } catch (e) { }
+          return (j && j.ok) ? { snap: null, ping: j } : next();
+        }).catch(next);
+      });
+    }
+    return next();
+  }
+
   var bridgeFrame = null, bridgeSeq = 0, bridgePending = {};
 
   function onBridgeMsg(ev) {
@@ -813,6 +839,78 @@ details.card>summary .chev .ic{width:15px;height:15px}
     });
   }
 
+  /* ============ 3b. 首屏快照缓存（先画缓存，再换真数据） ============
+     管理器每次重新打开 WebUI 都要重新走一遍 exec 通道 + 首批请求，
+     体感就是「转圈等加载」。把上一次的快照写进 localStorage，下次
+     打开先用它把界面画出来，真实数据到手后再覆盖。
+     注意：缓存只负责「先画」，不参与任何判断，S.ready 仍然只在
+     真实数据到手时置 true（外部探针依赖这个语义）。 */
+  var SNAP_KEY = 'tc.snap';
+  var SNAP_MAX_AGE = 86400000;   // 超过 1 天的缓存直接作废
+  var SNAP_MIN_GAP = 15000;      // 轮询落盘最小间隔，避免反复写
+
+  function snapLoad() {
+    try {
+      var raw = window.localStorage.getItem(SNAP_KEY);
+      if (!raw) return null;
+      var o = JSON.parse(raw);
+      if (!o || !o.at || !o.snap || !o.snap.info) return null;
+      if (Math.abs(Date.now() - o.at) > SNAP_MAX_AGE) return null;
+      return o.snap;
+    } catch (e) { return null; }
+  }
+
+  function snapSave() {
+    if (!S.info || !S.status) return;   // 数据不全不落盘
+    try {
+      window.localStorage.setItem(SNAP_KEY, JSON.stringify({
+        at: Date.now(),
+        snap: {
+          ok: true, ver: (S.info.module && S.info.module.version) || '',
+          info: S.info, status: S.status,
+          config: { ok: true, exists: true, config: S.cfg, defaults: S.def },
+          bypass: S.bypass || { ok: true, exists: false, apps: [] }
+        }
+      }));
+      S.snapAt = Date.now();
+    } catch (e) { }
+  }
+
+  function snapMaybe() {
+    if (!S.ready) return;
+    if (Date.now() - (S.snapAt || 0) < SNAP_MIN_GAP) return;
+    snapSave();
+  }
+
+  /* 把快照填进界面（不置 ready、不启动轮询、不出错误提示） */
+  function applySnapshot(j) {
+    if (!j) return false;
+    var hit = false;
+    if (j.info) { renderInfo(j.info); hit = true; }
+    if (j.status) { S.status = j.status; renderStatus(); hit = true; }
+    if (j.config) { renderCfg(j.config); hit = true; }
+    if (j.bypass) { renderBypass(j.bypass); hit = true; }
+    return hit;
+  }
+
+  function loadAll() {
+    return Promise.all([loadInfo(), loadCfg(), refreshStatus(), loadBypass()]);
+  }
+
+  function afterReady() {
+    S.ready = true;   // 只有真实数据到手才算就绪（外部探针依赖这个语义）
+    hideBoot();
+    startPoll();
+    setTab('home');
+  }
+
+  /* direct / bridge 通道的合并请求；拿不到就返回 null，调用方退回逐条加载 */
+  function pullSnapshot() {
+    return callJSON('/api/snapshot').then(function (j) {
+      return (j && j.ok && j.info) ? j : null;
+    }).catch(function () { return null; });
+  }
+
   /* ============ 4. 首次启动 ============ */
   function hideBoot() {
     var b = $('#boot');
@@ -821,6 +919,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
   function bootFail(msg, sub) {
     var b = $('#boot');
     if (b) {
+      b.classList.remove('hide');   // 缓存可能已提前 hideBoot()，失败时要重新显示
       b.innerHTML = '<div style="text-align:center;padding:0 28px">' +
         '<svg class="ic" style="width:34px;height:34px;color:var(--bad);margin:0 auto 12px"><use href="#i-warn"/></svg>' +
         '<p style="color:var(--txt);font-size:14.5px;font-weight:600;margin-bottom:6px">' + esc(msg) + '</p>' +
@@ -993,6 +1092,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
       S.status = st;
       S.failCount = 0;
       renderStatus();
+      snapMaybe();
     }).catch(function (e) {
       S.failCount++;
       if (S.failCount >= 2) {
@@ -1103,6 +1203,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
     postForm('/api/config', parts.join('&')).then(function (j) {
       if (j && j.ignored && j.ignored.length) toast('已忽略无效项：' + j.ignored.join('、'), 2600);
       setSaveState('ok', '已保存 · ' + nowStr());
+      snapSave();
     }).catch(function (e) {
       setSaveState('err', '保存失败：' + e.message);
       toast('保存失败：' + e.message, 2600);
@@ -1112,18 +1213,20 @@ details.card>summary .chev .ic{width:15px;height:15px}
     });
   }
 
+  function renderCfg(j) {
+    if (!j) return;
+    S.cfg = j.config || {};
+    S.def = j.defaults || {};
+    if (!j.exists) {
+      $('#cfgWarn').innerHTML = noteHTML('配置文件不存在，模块可能未正确安装', true);
+    }
+    // 用默认值补齐缺项
+    Object.keys(S.def).forEach(function (k) { if (S.cfg[k] === undefined) S.cfg[k] = S.def[k]; });
+    syncCfgUI();
+  }
+
   function loadCfg() {
-    return callJSON('/api/config').then(function (j) {
-      S.cfg = j.config || {};
-      S.def = j.defaults || {};
-      if (!j.exists) {
-        $('#cfgWarn').innerHTML = noteHTML('配置文件不存在，模块可能未正确安装', true);
-      }
-      // 用默认值补齐缺项
-      Object.keys(S.def).forEach(function (k) { if (S.cfg[k] === undefined) S.cfg[k] = S.def[k]; });
-      syncCfgUI();
-      loadBypass();
-    });
+    return callJSON('/api/config').then(renderCfg);
   }
 
   function noteHTML(txt, warn) {
@@ -1180,11 +1283,14 @@ details.card>summary .chev .ic{width:15px;height:15px}
   }
 
   /* ---- 旁路白名单 ---- */
+  function renderBypass(j) {
+    if (!j) return;
+    S.bypass = j;
+    var ta = $('#bypassTa');
+    if (ta) ta.value = (j.apps || []).join('\n');
+  }
   function loadBypass() {
-    return callJSON('/api/bypass').then(function (j) {
-      var ta = $('#bypassTa');
-      if (ta) ta.value = (j.apps || []).join('\n');
-    }).catch(function () { });
+    return callJSON('/api/bypass').then(renderBypass).catch(function () { });
   }
   function saveBypass() {
     var ta = $('#bypassTa');
@@ -1193,6 +1299,8 @@ details.card>summary .chev .ic{width:15px;height:15px}
       if (j && j.ignored && j.ignored.length) toast('已忽略：' + j.ignored.join('、'), 2600);
       else toast('白名单已保存');
       if (j && j.apps) ta.value = j.apps.join('\n');
+      renderBypass(j);
+      snapSave();
     }).catch(function (e) { toast('保存失败：' + e.message, 2600); });
   }
 
@@ -1205,6 +1313,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
       toast(j.msg || '操作成功');
       return loadCfg();
     }).then(function () { return refreshStatus(); })
+      .then(function () { snapSave(); })
       .catch(function (e) { toast('操作失败：' + e.message, 2600); });
   }
 
@@ -1231,33 +1340,36 @@ details.card>summary .chev .ic{width:15px;height:15px}
     return v + ' · 端口 ' + ((e && e.port) || '--');
   }
 
+  function renderInfo(j) {
+    if (!j) return;
+    S.info = j;
+    var d = j.device || {}, m = j.module || {}, e = j.env || {};
+    $('#devModel').textContent = (d.model || '--') + (d.device ? ' · ' + d.device : '');
+    $('#devAndroid').textContent = 'Android ' + (d.android || '?');
+    $('#devVer').textContent = m.version || '--';
+    $('#devPort').textContent = linkText(e);
+    $('#brandSub').textContent = brandSubText(m.version, e);
+    applyTransport(e);
+    var f = j.feature || {};
+    var rows = [
+      ['模块目录', m.dir || '--'],
+      ['Busybox', e.busybox || '未找到'],
+      ['电流节点', e.cur_file || '未找到'],
+      ['停充节点', e.suspend_file || '未找到'],
+      ['内核', d.kernel || '--'],
+      ['状态/电量', (f.status ? '✓' : '✗') + ' / ' + (f.capacity ? '✓' : '✗')],
+      ['温度/电流', (f.temp ? '✓' : '✗') + ' / ' + (f.current ? '✓' : '✗')],
+      ['阶梯/停充', (f.step ? '✓' : '✗') + ' / ' + (f.suspend ? '✓' : '✗')],
+      ['旁路文件', f.bypass ? '✓ 已存在' : '✗ 不存在']
+    ];
+    $('#diagBody').innerHTML = rows.map(function (r) {
+      return '<div class="kv"><div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div></div>';
+    }).join('');
+    applyFeature();
+  }
+
   function loadInfo() {
-    return callJSON('/api/info').then(function (j) {
-      S.info = j;
-      var d = j.device || {}, m = j.module || {}, e = j.env || {};
-      $('#devModel').textContent = (d.model || '--') + (d.device ? ' · ' + d.device : '');
-      $('#devAndroid').textContent = 'Android ' + (d.android || '?');
-      $('#devVer').textContent = m.version || '--';
-      $('#devPort').textContent = linkText(e);
-      $('#brandSub').textContent = brandSubText(m.version, e);
-      applyTransport(e);
-      var f = j.feature || {};
-      var rows = [
-        ['模块目录', m.dir || '--'],
-        ['Busybox', e.busybox || '未找到'],
-        ['电流节点', e.cur_file || '未找到'],
-        ['停充节点', e.suspend_file || '未找到'],
-        ['内核', d.kernel || '--'],
-        ['状态/电量', (f.status ? '✓' : '✗') + ' / ' + (f.capacity ? '✓' : '✗')],
-        ['温度/电流', (f.temp ? '✓' : '✗') + ' / ' + (f.current ? '✓' : '✗')],
-        ['阶梯/停充', (f.step ? '✓' : '✗') + ' / ' + (f.suspend ? '✓' : '✗')],
-        ['旁路文件', f.bypass ? '✓ 已存在' : '✗ 不存在']
-      ];
-      $('#diagBody').innerHTML = rows.map(function (r) {
-        return '<div class="kv"><div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div></div>';
-      }).join('');
-      applyFeature();
-    });
+    return callJSON('/api/info').then(renderInfo);
   }
 
   /* ============ 10. 日志 ============ */
@@ -1398,19 +1510,34 @@ details.card>summary .chev .ic{width:15px;height:15px}
   }
 
   function boot() {
+    // 缓存先画一遍：管理器 exec 通道就绪前就能看到内容，真实数据到手后再覆盖
+    var cached = snapLoad();
+    if (cached && applySnapshot(cached)) hideBoot();
+
     // ① 首选 ksu.exec 通道（零端口）② 回环端口（v1.0 兼容）③ iframe 桥接（浏览器调试）
-    ksuPing().then(function (p) {
-      if (p) {
+    ksuSnapshot().then(function (r) {
+      if (r) {
         S.mode = 'ksu';
         S.base = '';
-        S.ping = p;
-        return true;
+        if (r.snap) {
+          // 一次往返拿齐四份数据（新模块）
+          applySnapshot(r.snap);
+          snapSave();
+          afterReady();
+          return true;
+        }
+        // 旧模块没有 /api/snapshot，逐条加载
+        S.ping = r.ping;
+        return loadAll().then(function () { afterReady(); return true; });
       }
       return detect().then(function (base) {
         if (base) {
           S.mode = 'direct';
           S.base = base;
-          return true;
+          return pullSnapshot().then(function (snap) {
+            if (snap) { applySnapshot(snap); snapSave(); afterReady(); return true; }
+            return loadAll().then(function () { afterReady(); return true; });
+          });
         }
         // 管理器环境下不再尝试 iframe 桥接（那会白等 12 秒）
         if (ksuReady()) return false;
@@ -1420,7 +1547,11 @@ details.card>summary .chev .ic{width:15px;height:15px}
         return bridgeCall('/api/ping', null).then(function (t) {
           var j = null;
           try { j = JSON.parse(t); } catch (e) { }
-          return !!(j && j.ok);
+          if (!(j && j.ok)) return false;
+          return pullSnapshot().then(function (snap) {
+            if (snap) { applySnapshot(snap); snapSave(); afterReady(); return true; }
+            return loadAll().then(function () { afterReady(); return true; });
+          });
         }).catch(function () { return false; });
       });
     }).then(function (ok) {
@@ -1430,14 +1561,7 @@ details.card>summary .chev .ic{width:15px;height:15px}
             ? '本页面没有拿到模块管理器的 exec 权限。'
             : '当前环境没有模块管理器提供的 exec 接口。') +
           '请从 KernelSU / SukiSU / KernelSU-Next 管理器的「模块 → 充电调控 → 打开」进入本面板（v1.1 起模块不再监听任何端口，浏览器直接打开 127.0.0.1 已不可用）。');
-        return;
       }
-      return Promise.all([loadInfo(), loadCfg(), refreshStatus()]).then(function () {
-        S.ready = true;   // 只有数据全部到手才算就绪（外部探针依赖这个语义）
-        hideBoot();
-        startPoll();
-        setTab('home');
-      });
     }).catch(function (e) {
       bootFail('初始化失败', String(e && e.message || e));
     });
@@ -1453,11 +1577,15 @@ details.card>summary .chev .ic{width:15px;height:15px}
   // 供 CDP / 调试使用
   window.__tc.setTab = setTab;
   window.__tc.refresh = refreshStatus;
-  window.__tc.reload = function () { return Promise.all([loadInfo(), loadCfg(), refreshStatus(), loadLog()]); };
+  window.__tc.reload = function () { return Promise.all([loadInfo(), loadCfg(), refreshStatus(), loadBypass(), loadLog()]); };
   window.__tc.save = doSave;
   window.__tc.setTheme = setTheme;
   window.__tc.loadLog = loadLog;
   window.__tc.drawChart = drawChart;
+  window.__tc.snapLoad = snapLoad;
+  window.__tc.snapSave = snapSave;
+  window.__tc.snapKey = SNAP_KEY;
+  window.__tc.applySnapshot = applySnapshot;
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

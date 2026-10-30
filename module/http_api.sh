@@ -12,6 +12,7 @@
 #    GET  /                     面板 (webroot/index.html)
 #    GET  /panel.html           同上（兼容旧书签）
 #    GET  /api/ping             健康检查
+#    GET  /api/snapshot         info + status + config + bypass 合并返回（首屏一次到手）
 #    GET  /api/info             模块/设备/功能可用性
 #    GET  /api/status           实时充电状态 + 生效策略
 #    GET  /api/config           配置项 + 默认值
@@ -109,7 +110,7 @@ api_ping() {
     http_send "{\"ok\":true,\"ver\":\"$VER\",\"port\":$PORT}"
 }
 
-api_info() {
+api_info_body() {
     VER=$(sed -n 's/^version=//p' "$MODPROP" 2>/dev/null | head -1)
     [ -z "$VER" ] && VER="unknown"
     MODEL=$(getprop ro.product.model 2>/dev/null)
@@ -143,7 +144,11 @@ api_info() {
     F_SUSP=false; [ -n "$SUSPEND_FILE" ] && F_SUSP=true
     F_BYPASS=$(f_yn "$BYPASS_FILE")
 
-    http_send "{\"ok\":true,\"module\":{\"version\":\"$VER\",\"dir\":\"$MODDIR\",\"installed\":$([ -d "$TCP_DIR" ] && printf true || printf false)},\"device\":{\"model\":\"$MODEL\",\"device\":\"$DEVICE\",\"android\":\"$REL\",\"kernel\":\"$KREL\"},\"env\":{\"busybox\":\"$BUSYBOX\",\"port\":$PORT,\"cur_file\":\"$CUR_FILE\",\"suspend_file\":\"$SUSPEND_FILE\"},\"feature\":{\"status\":$F_STATUS,\"capacity\":$F_CAP,\"temp\":$F_TEMP,\"current\":$F_CUR,\"step\":$F_STEP,\"suspend\":$F_SUSP,\"bypass\":$F_BYPASS}}"
+    printf '%s' "{\"ok\":true,\"module\":{\"version\":\"$VER\",\"dir\":\"$MODDIR\",\"installed\":$([ -d "$TCP_DIR" ] && printf true || printf false)},\"device\":{\"model\":\"$MODEL\",\"device\":\"$DEVICE\",\"android\":\"$REL\",\"kernel\":\"$KREL\"},\"env\":{\"busybox\":\"$BUSYBOX\",\"port\":$PORT,\"cur_file\":\"$CUR_FILE\",\"suspend_file\":\"$SUSPEND_FILE\"},\"feature\":{\"status\":$F_STATUS,\"capacity\":$F_CAP,\"temp\":$F_TEMP,\"current\":$F_CUR,\"step\":$F_STEP,\"suspend\":$F_SUSP,\"bypass\":$F_BYPASS}}"
+}
+
+api_info() {
+    http_send "$(api_info_body)"
 }
 
 api_status() {
@@ -404,6 +409,20 @@ api_bypass_get() {
     }'
 }
 
+# 首屏合并路由：一次 ksu.exec 往返拿齐 info/status/config/bypass。
+# 各 *_body 函数只产正文，这里用 printf 传参拼接（不可写进双引号，
+# 否则 esc() 产出的 \" 会被 shell 二次反转义成非法 JSON）。
+api_snapshot() {
+    VER=$(sed -n 's/^version=//p' "$MODPROP" 2>/dev/null | head -1)
+    [ -z "$VER" ] && VER="unknown"
+    S_INFO=$(api_info_body)
+    S_STATUS=$(api_status)
+    S_CFG=$(api_config_get)
+    S_BYP=$(api_bypass_get)
+    printf '{"ok":true,"ver":"%s","info":%s,"status":%s,"config":%s,"bypass":%s}' \
+        "$VER" "$S_INFO" "$S_STATUS" "$S_CFG" "$S_BYP"
+}
+
 api_bypass_save() {
     # $1 = raw body (text=...)
     BODY_FILE="$TCP_DIR/.body.tmp"
@@ -563,6 +582,13 @@ handle_request() {
             ;;
         /api/ping)
             api_ping
+            ;;
+        /api/snapshot)
+            if [ "$req_method" = "GET" ]; then
+                http_send "$(api_snapshot)"
+            else
+                http_err 405 "Method Not Allowed" "请使用 GET"
+            fi
             ;;
         /api/info)
             api_info

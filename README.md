@@ -6,17 +6,19 @@
 
 ## 下载
 
-最新版：**v1.1（零监听端口）** —— [Releases · v1.1](https://github.com/Yxlan-yu/charge-control/releases/latest)
+最新版：**v1.2（首屏秒开）** —— [Releases · v1.2](https://github.com/Yxlan-yu/charge-control/releases/latest)
 
-- `charge-control-v1.1.zip`：Magisk / KernelSU / KernelSU-Next 通用模块包，管理器内直接安装。
+- `charge-control-v1.2.zip`：Magisk / KernelSU / KernelSU-Next 通用模块包，管理器内直接安装。
 - 模块源码在 [`module/`](module/) 目录，`module/` 内的文件结构与 zip 内完全一致，可自行打包。
+
+> **v1.2 的关键变化：重新打开面板不用再等数据加载。** 首屏从 5 次 `ksu.exec` 往返（ping / info / status / config / bypass）合并成 1 次 `/api/snapshot`，并把上一次的快照存进 `localStorage`（键 `tc.snap`，1 天作废，轮询时至少间隔 15 秒更新），下次打开先用缓存把页面画出来，真实数据到手再覆盖。缓存只负责先画，不会替你把「没连上」画成「连上了」。
 
 > **v1.1 的关键变化：面板不再监听任何端口。** 旧版把 WebUI 绑在 `127.0.0.1:8080`，虽然挡住了局域网，但挡不住本机其它 App（它们连 127.0.0.1 时源地址就是 127.0.0.1，且接口没有鉴权）。v1.1 改由模块管理器注入的 `ksu.exec` 在 root shell 里执行 `api_cli.sh` 取数据，模块**不开端口、不建 socket**。
 > 代价：面板只能在 KernelSU / SukiSU / KernelSU-Next 管理器内打开；Magisk 管理器没有 WebUI 入口，Magisk 用户只能直接编辑 `option.txt`。
 
-> 从 v1.0 升级可直接覆盖安装（id 未变）；从更早的 `turbo-charge` 升级请先卸载旧模块，配置目录 `/data/adb/turbo-charge` 会保留。
+> 从 v1.0 / v1.1 升级可直接覆盖安装（id 未变）；从更早的 `turbo-charge` 升级请先卸载旧模块，配置目录 `/data/adb/turbo-charge` 会保留。
 
-## 界面预览（v1.1）
+## 界面预览（v1.2）
 
 控制面板按 **Miuix（HyperOS）** 风格重做：浅色 `#F2F3F5` 底 + 白色 20px 圆角卡片 + `#3482FF` 强调色，深色为纯黑底 + `#191A1C` 卡片 + `#4A8DFF` 强调色；顶部分段控件切换 **概览 / 参数 / 日志** 三个页面，主题支持 **跟随系统 / 浅色 / 深色**。
 
@@ -58,8 +60,22 @@ v1.1 直接把端口拿掉了：
 
 - **只能在管理器里打开面板**。面板不再是网页服务，浏览器直接访问 `http://手机IP:8080` 或 `http://127.0.0.1:8080` 都会失败（这是设计如此，不是 bug）。
 - **Magisk 用户看不到面板**：Magisk 管理器没有 WebUI 入口，也没有 `ksu.exec`。Magisk 下模块本体（充电控制）照常工作，改参数请直接编辑 `/data/adb/turbo-charge/option.txt`。
-- **每次请求要在 root shell 里 fork 一次**，刷新耗时比本地 HTTP 略高（实测一屏数据 3 个请求约 0.3–1 秒），换来的是零端口暴露。
+- **每次请求要在 root shell 里 fork 一次**，刷新耗时比本地 HTTP 略高（v1.2 起首屏只发 1 次请求，轮询仍是每秒 1 次状态读取），换来的是零端口暴露。
 - 极老的 KernelSU 版本 `ksu.exec` 签名不一致时面板会提示连不上；本面板做了三种调用形态的回退（对象回调 / 字符串回调 / 布尔返回），并会在 `/modules/` 路径不存在时自动改走 `/modules_update/`。
+
+## 首屏加载（v1.2 优化）
+
+v1.0 / v1.1 打开面板时要发 **5 次 `ksu.exec`**（ping + info + status + config + bypass）。管理器是串行执行 `ksu.exec` 的，每次都要重新 `fork` 一个 root shell 跑 `api_cli.sh` → `http_api.sh` → `busybox`，5 次就是 5 份开销相加 —— 这就是「每次退出管理器再进来都要等一下」的来源（`正在连接` 那一层之后的数据加载）。
+
+v1.2 做了两件事：
+
+1. **合并接口 `/api/snapshot`**：一次往返就把 `info` + `status` + `config` + `bypass` 四份数据全拿回来，首屏请求数 **5 → 1**。字段就是原来四个接口的原文拼装，没有新增配置项、没有改写入逻辑。
+2. **本地快照缓存**：拿到真实数据后把快照存进 `localStorage`（键 `tc.snap`，超过 1 天作废，轮询时至少间隔 15 秒才更新一次）。下次再打开面板，**先用缓存把概览 / 参数 / 日志画出来**，等真实数据到手再覆盖 —— 于是页面是「立刻有内容」，而不是「先空着等转圈」。
+
+两条不可见的约束（保证不骗人）：
+
+- 缓存**只负责先画**：不置连接成功、不启动轮询、不显示传输方式，真实数据没到手前页脚仍然显示读取中。
+- **旧模块 + 新前端也能用**：`/api/snapshot` 不存在时会自动退回 `/api/ping` 探测，然后按老办法逐条加载。
 
 ## 稳定性
 
@@ -76,7 +92,7 @@ v1.1 直接把端口拿掉了：
 KernelSU / SukiSU / KernelSU-Next 管理器 → 本模块 → 打开（WebUI）
 ```
 
-面板顶栏副标题在管理器内只显示版本号（例如 `v1.1`），`设备信息 → 连接方式` 一行默认隐藏；只有在降级的 iframe 桥接 / 回环 HTTP 模式下才会显示传输方式，用于排障。
+面板顶栏副标题在管理器内只显示版本号（例如 `v1.2`），`设备信息 → 连接方式` 一行默认隐藏；只有在降级的 iframe 桥接 / 回环 HTTP 模式下才会显示传输方式，用于排障。
 
 > 浏览器直接打开 `http://手机IP:8080`、`adb forward` 之类的老办法**在 v1.1 全部失效**。
 > 所有设备信息均在本机处理，不做任何上传。
@@ -131,11 +147,12 @@ KernelSU / SukiSU / KernelSU-Next 管理器 → 本模块 → 打开（WebUI）
 
 ## 接口（仅管理器内可达）
 
-接口本身与 v1.0 完全相同，只是入口从 HTTP 端口换成了 `api_cli.sh <路径?查询> <方法> [base64 请求体]`：
+接口与 v1.0 相同（v1.2 新增一个只读的 `/api/snapshot` 合并入口），只是入口从 HTTP 端口换成了 `api_cli.sh <路径?查询> <方法> [base64 请求体]`：
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/ping` | 健康检查（`port` 恒为 0，表示非端口模式） |
+| GET | `/api/snapshot` | 首屏合并：`info` + `status` + `config` + `bypass` 一次返回（仅 GET，其它方法 405） |
 | GET | `/api/info` | 模块 / 设备 / 功能可用性 |
 | GET | `/api/status` | 实时充电状态 + 生效策略 |
 | GET | `/api/config` | 配置项 + 默认值 |
@@ -162,6 +179,9 @@ A：说明当前不在管理器里，页面退回了 iframe 桥接（本地调�
 **Q：升级后 8080 还被占用？**
 A：那是 v1.0 遗留的 `nc` 进程，重启一次由 `service.sh` 清理；也可以手动 `su -c 'kill -9 $(cat /data/adb/turbo-charge/webui.pid)'`。
 
+**Q：v1.2 首屏还是要等一下？**
+A：首屏已经从 5 次请求压到 1 次，但每次请求仍要在 root shell 里 fork 一遍（真机单次约 0.2–0.6 秒，取决于 busybox 与调度）。所以做法是「缓存先画 + 真实数据后到」：页面立刻有内容，数字随后刷新成最新的。第一次安装（还没有缓存）必然是白纸起步，第二次之后才会明显变快。
+
 ## 与原版差异
 
 1. 内置 WebUI 控制面板（概览 / 参数 / 日志 / 回滚 / 恢复默认）。
@@ -169,13 +189,14 @@ A：那是 v1.0 遗留的 `nc` 进程，重启一次由 `service.sh` 清理；�
 3. **面板零监听端口**：经 `ksu.exec` 在 root shell 内直连 `api_cli.sh`，不开放任何端口、不创建 socket。
 4. 模块更名为 **充电调控**，id 为 `charge-control`，版本号从 **v1.0** 重新计数。
 5. 原版核心功能与配置格式保持不变。
+6. **首屏一次请求拿齐四份数据并本地缓存**（v1.2），重新打开面板先用快照秒显示。
 
 ## 在线更新
 
 `module.prop` 的 `updateJson` 指向本仓库自建的 [`update.json`](https://github.com/Yxlan-yu/charge-control/blob/main/update.json)：
 
 - KernelSU / KernelSU-Next / Magisk 管理器打开模块详情时会读它，发现更大的 `versionCode` 就提示更新，并直接下载 Release 里的 zip。
-- 本次发布是 `version=1.1` / `versionCode=2`，对应 [Release v1.1](https://github.com/Yxlan-yu/charge-control/releases/tag/v1.1)。
+- 本次发布是 `version=1.2` / `versionCode=3`，对应 [Release v1.2](https://github.com/Yxlan-yu/charge-control/releases/tag/v1.2)。
 - 该地址走 `raw.githubusercontent.com`：**如果你的网络访问不了它，管理器内的更新检查会失败**（不影响模块本体运行），请直接到 [Releases](https://github.com/Yxlan-yu/charge-control/releases) 下载 zip 手动刷入。
 
 ## 仓库结构
@@ -208,20 +229,21 @@ charge-control/
 > `common/turbo-charge` 为原版作者提供的预编译二进制，本仓库不改动其逻辑；
 > 该二进制内部硬编码了配置目录 `/data/adb/turbo-charge`，所以目录名保持原样。
 
-### 数据是怎么流动的（v1.1）
+### 数据是怎么流动的（v1.2）
 
 ```
 管理器 WebView（webroot/index.html）
-        │  window.ksu.exec('sh api_cli.sh /api/status GET')
+        │  window.ksu.exec('sh api_cli.sh /api/snapshot GET')
+        │  （首屏合并：info + status + config + bypass 一次到手）
         ▼
 root shell ── api_cli.sh ── 拼一次内部请求 ──▶ http_api.sh
                                                    │
-                                  option.txt / log.txt / sysfs 读数
+                                 option.txt / log.txt / sysfs 读数
                                                    │
         ◀───────── 原始 HTTP 响应文本（状态行+头+正文）─────────┘
 ```
 
-全程没有 socket：`api_cli.sh` 只是把参数拼成一次请求喂给 `http_api.sh`，路由、键白名单、数值校验、原子写入逻辑与 v1.0 逐字节一致。
+全程没有 socket：`api_cli.sh` 只是把参数拼成一次请求喂给 `http_api.sh`，路由、键白名单、数值校验、原子写入逻辑与 v1.0 逐字节一致。前端另有一份 `localStorage` 快照缓存（键 `tc.snap`），只用于下次打开时先把页面画出来，不参与任何写入。
 
 ## 开源协议
 

@@ -244,17 +244,29 @@ details.card>summary .chev .ic{width:15px;height:15px}
   -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
 }
 .toast.on{opacity:1;transform:translate(-50%,0)}
-/* ---------- boot overlay ---------- */
+/* ---------- boot：默认只是一条顶部细进度条（不遮挡界面） ----------
+   v1.3：以前是全屏不透明遮罩，点开面板先盯着转圈 0.6~1 秒；
+   现在默认不遮任何东西，界面直接以「-- / 等待数据」的骨架形态出现，
+   只有真的连不上模块时才由 bootFail() 升格成全屏错误页。 */
 .boot{
-  position:fixed;inset:0;z-index:80;background:var(--bg);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
-  transition:opacity .3s ease,visibility .3s;
+  position:fixed;left:0;right:0;top:0;height:3px;z-index:80;pointer-events:none;
+  background:linear-gradient(90deg,rgba(52,130,255,0),var(--accent),rgba(52,130,255,0));
+  background-size:42% 100%;background-repeat:no-repeat;
+  animation:bootrun 1.1s linear infinite;
+  transition:opacity .18s ease,visibility .18s;
 }
 .boot.hide{opacity:0;visibility:hidden}
-.boot .ring2{
-  width:30px;height:30px;border-radius:50%;border:2.5px solid var(--line2);
-  border-top-color:var(--accent);animation:spin .8s linear infinite;
+/* 缓存命中时用：立刻消失，不做淡出（省掉 300ms 的「遮罩还在」体感） */
+.boot.instant{transition:none}
+.boot .ring2,.boot p{display:none}
+@keyframes bootrun{0%{background-position:-50% 0}100%{background-position:150% 0}}
+/* 连不上模块时才铺满全屏报错 */
+.boot.fail{
+  left:0;right:0;top:0;bottom:0;height:auto;pointer-events:auto;
+  background:var(--bg);animation:none;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
 }
+.boot.fail .ring2,.boot.fail p{display:block}
 .boot p{margin:0;font-size:13px;color:var(--txt3)}
 @media (min-width:560px){
   .mini .mv{font-size:18px}
@@ -846,8 +858,10 @@ details.card>summary .chev .ic{width:15px;height:15px}
      注意：缓存只负责「先画」，不参与任何判断，S.ready 仍然只在
      真实数据到手时置 true（外部探针依赖这个语义）。 */
   var SNAP_KEY = 'tc.snap';
-  var SNAP_MAX_AGE = 86400000;   // 超过 1 天的缓存直接作废
+  var SNAP_MAX_AGE = 2592000000; // 超过 30 天直接作废（正常使用永远命中，保证「先出数据」）
   var SNAP_MIN_GAP = 15000;      // 轮询落盘最小间隔，避免反复写
+  var SNAP_FRESH = 120000;       // 2 分钟内的缓存算「新」，更旧的先画但副标题提示正在同步
+  var SNAP_AGE = 0;              // 上一次 snapLoad() 命中的缓存年龄（ms）
 
   function snapLoad() {
     try {
@@ -855,7 +869,9 @@ details.card>summary .chev .ic{width:15px;height:15px}
       if (!raw) return null;
       var o = JSON.parse(raw);
       if (!o || !o.at || !o.snap || !o.snap.info) return null;
-      if (Math.abs(Date.now() - o.at) > SNAP_MAX_AGE) return null;
+      var age = Math.abs(Date.now() - o.at);
+      if (age > SNAP_MAX_AGE) return null;
+      SNAP_AGE = age;
       return o.snap;
     } catch (e) { return null; }
   }
@@ -912,14 +928,19 @@ details.card>summary .chev .ic{width:15px;height:15px}
   }
 
   /* ============ 4. 首次启动 ============ */
-  function hideBoot() {
+  function hideBoot(instant) {
     var b = $('#boot');
-    if (b) b.classList.add('hide');
+    if (!b) return;
+    // instant=true：缓存命中时立刻收起细进度条，不做淡出（少一次视觉等待）
+    if (instant) b.classList.add('instant');
+    b.classList.add('hide');
   }
   function bootFail(msg, sub) {
     var b = $('#boot');
     if (b) {
       b.classList.remove('hide');   // 缓存可能已提前 hideBoot()，失败时要重新显示
+      b.classList.remove('instant');
+      b.classList.add('fail');      // 细进度条升格成全屏错误页
       b.innerHTML = '<div style="text-align:center;padding:0 28px">' +
         '<svg class="ic" style="width:34px;height:34px;color:var(--bad);margin:0 auto 12px"><use href="#i-warn"/></svg>' +
         '<p style="color:var(--txt);font-size:14.5px;font-weight:600;margin-bottom:6px">' + esc(msg) + '</p>' +
@@ -1512,59 +1533,86 @@ details.card>summary .chev .ic{width:15px;height:15px}
   function boot() {
     // 缓存先画一遍：管理器 exec 通道就绪前就能看到内容，真实数据到手后再覆盖
     var cached = snapLoad();
-    if (cached && applySnapshot(cached)) hideBoot();
+    if (cached && applySnapshot(cached)) {
+      hideBoot(true);   // 缓存命中：细进度条立刻收起，不做淡出
+      // 太旧的缓存先画着，但明确告诉用户这是缓存，正在后台同步
+      if (SNAP_AGE > SNAP_FRESH) $('#brandSub').textContent = '显示缓存数据 · 正在同步…';
+    }
 
     // ① 首选 ksu.exec 通道（零端口）② 回环端口（v1.0 兼容）③ iframe 桥接（浏览器调试）
-    ksuSnapshot().then(function (r) {
-      if (r) {
-        S.mode = 'ksu';
-        S.base = '';
-        if (r.snap) {
-          // 一次往返拿齐四份数据（新模块）
-          applySnapshot(r.snap);
-          snapSave();
-          afterReady();
-          return true;
+    var kick = function () {
+      ksuSnapshot().then(function (r) {
+        if (r) {
+          S.mode = 'ksu';
+          S.base = '';
+          if (r.snap) {
+            // 一次往返拿齐四份数据（新模块）
+            applySnapshot(r.snap);
+            snapSave();
+            afterReady();
+            return true;
+          }
+          // 旧模块没有 /api/snapshot，逐条加载
+          S.ping = r.ping;
+          return loadAll().then(function () { afterReady(); return true; });
         }
-        // 旧模块没有 /api/snapshot，逐条加载
-        S.ping = r.ping;
-        return loadAll().then(function () { afterReady(); return true; });
-      }
-      return detect().then(function (base) {
-        if (base) {
-          S.mode = 'direct';
-          S.base = base;
-          return pullSnapshot().then(function (snap) {
-            if (snap) { applySnapshot(snap); snapSave(); afterReady(); return true; }
-            return loadAll().then(function () { afterReady(); return true; });
-          });
+        return detect().then(function (base) {
+          if (base) {
+            S.mode = 'direct';
+            S.base = base;
+            return pullSnapshot().then(function (snap) {
+              if (snap) { applySnapshot(snap); snapSave(); afterReady(); return true; }
+              return loadAll().then(function () { afterReady(); return true; });
+            });
+          }
+          // 管理器环境下不再尝试 iframe 桥接（那会白等 12 秒）
+          if (ksuReady()) return false;
+          // 退回 iframe 桥接
+          S.mode = 'bridge';
+          S.base = '';
+          return bridgeCall('/api/ping', null).then(function (t) {
+            var j = null;
+            try { j = JSON.parse(t); } catch (e) { }
+            if (!(j && j.ok)) return false;
+            return pullSnapshot().then(function (snap) {
+              if (snap) { applySnapshot(snap); snapSave(); afterReady(); return true; }
+              return loadAll().then(function () { afterReady(); return true; });
+            });
+          }).catch(function () { return false; });
+        });
+      }).then(function (ok) {
+        if (!ok) {
+          bootFail('连接不到模块服务',
+            (ksuReady()
+              ? '本页面没有拿到模块管理器的 exec 权限。'
+              : '当前环境没有模块管理器提供的 exec 接口。') +
+            '请从 KernelSU / SukiSU / KernelSU-Next 管理器的「模块 → 充电调控 → 打开」进入本面板（v1.1 起模块不再监听任何端口，浏览器直接打开 127.0.0.1 已不可用）。');
         }
-        // 管理器环境下不再尝试 iframe 桥接（那会白等 12 秒）
-        if (ksuReady()) return false;
-        // 退回 iframe 桥接
-        S.mode = 'bridge';
-        S.base = '';
-        return bridgeCall('/api/ping', null).then(function (t) {
-          var j = null;
-          try { j = JSON.parse(t); } catch (e) { }
-          if (!(j && j.ok)) return false;
-          return pullSnapshot().then(function (snap) {
-            if (snap) { applySnapshot(snap); snapSave(); afterReady(); return true; }
-            return loadAll().then(function () { afterReady(); return true; });
-          });
-        }).catch(function () { return false; });
+      }).catch(function (e) {
+        bootFail('初始化失败', String(e && e.message || e));
       });
-    }).then(function (ok) {
-      if (!ok) {
-        bootFail('连接不到模块服务',
-          (ksuReady()
-            ? '本页面没有拿到模块管理器的 exec 权限。'
-            : '当前环境没有模块管理器提供的 exec 接口。') +
-          '请从 KernelSU / SukiSU / KernelSU-Next 管理器的「模块 → 充电调控 → 打开」进入本面板（v1.1 起模块不再监听任何端口，浏览器直接打开 127.0.0.1 已不可用）。');
-      }
-    }).catch(function (e) {
-      bootFail('初始化失败', String(e && e.message || e));
-    });
+    };
+
+    // v1.3：管理器里第一次 window.ksu.exec 是同步阻塞调用（实测主线程被卡 0.73~0.79s），
+    // 若在首帧前就发起，浏览器还没机会绘制任何像素，用户只能盯着空白等。
+    // 这里把它推到首帧之后再发，缓存内容立刻可见；真实数据到手时间不变。
+    // 没有 exec 接口（浏览器调试：direct / bridge）时保持原样直接跑。
+    if (!ksuReady()) { kick(); return; }
+    var fired = false;
+    var run = function () {
+      if (fired) return;
+      fired = true;
+      kick();
+    };
+    // 兜底：万一 rAF 被节流/不触发（页面不可见等），400ms 后强制启动，绝不卡死
+    setTimeout(run, 400);
+    if (window.requestAnimationFrame) {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { setTimeout(run, 0); });
+      });
+    } else {
+      setTimeout(run, 0);
+    }
   }
 
   function init() {
@@ -1587,8 +1635,9 @@ details.card>summary .chev .ic{width:15px;height:15px}
   window.__tc.snapKey = SNAP_KEY;
   window.__tc.applySnapshot = applySnapshot;
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+  // 脚本在 </body> 前，DOM 已就绪，直接启动：少等一次 DOMContentLoaded
+  // （v1.3：以前在 readyState==='loading' 时会挂到 DOMContentLoaded，白等一拍）
+  init();
 })();
 </script>
 </body>
